@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+.pytest_cache/
+evals/results_*.csv
+
+# internal working notes, not part of the submission
+plan.md
