@@ -719,6 +719,25 @@ class TestHumanControls:
         assert result.human_review_required is True
         assert all(check.status in (CheckStatus.OK, CheckStatus.FLAGGED, CheckStatus.SKIPPED) for check in result.checks)
 
+    def test_human_review_required_matches_every_public_case_expectation(self):
+        """Phase 5 audit: confirms the "always True" interpretation against
+        the one piece of ground truth available -- the public evaluation
+        harness. All six public cases, including the lowest-risk one
+        (PUB-01), expect human_review_required: true; none expects false.
+        If this ever changes in evals/public_cases.json, this test should be
+        revisited alongside the policy interpretation documented in
+        evaluate_policy().
+        """
+        import json
+        from pathlib import Path
+
+        cases_path = Path(__file__).resolve().parents[1] / "evals" / "public_cases.json"
+        cases = json.loads(cases_path.read_text(encoding="utf-8"))
+        assert len(cases) == 6
+        for case in cases:
+            expected = case["expectations"].get("human_review_required")
+            assert expected is True, f"{case['case_id']} expects human_review_required={expected}, not True"
+
 
 # ---------------------------------------------------------------------------
 # Determinism
@@ -773,3 +792,43 @@ class TestDataAccessClassification:
     def test_integrations_contribute_to_classification(self):
         profile = classify_data_access("internal_documents", ("Production cloud account",))
         assert profile.production_or_cloud_integration is True
+
+
+# ---------------------------------------------------------------------------
+# from_row()/to_decimal() must tolerate pandas' NaN-for-blank-cell convention
+# ---------------------------------------------------------------------------
+
+
+class TestPandasNanFromCsvRows:
+    """DataFrame.to_dict() turns a blank CSV cell into float('nan'), not None
+    or ''. This is not hypothetical: vendors.csv has a genuinely blank
+    security_review_date for NimbusAI, BrandBoard, and GrowthForge (new
+    vendors with incomplete onboarding) -- exactly the rows the vendor-risk
+    edge cases exercise most.
+    """
+
+    def test_vendor_registry_from_row_tolerates_nan_review_date(self):
+        row = {
+            "vendor_name": "NimbusAI",
+            "procurement_status": "New",
+            "security_status": "Unknown",
+            "security_review_date": float("nan"),
+            "legal_terms_status": "Unknown",
+        }
+        registry = VendorRegistryEvidence.from_row(row)
+        assert registry.security_review_date is None
+
+    def test_catalog_match_from_row_tolerates_nan_licensed_seats(self):
+        row = {
+            "software_id": "SW-TEST",
+            "product_name": "Test Product",
+            "category": "Test",
+            "vendor_name": "Test Vendor",
+            "status": "Approved",
+            "licensed_seats": float("nan"),
+        }
+        match = CatalogMatch.from_row(row)
+        assert match.licensed_seats is None
+
+    def test_to_decimal_tolerates_nan(self):
+        assert to_decimal(float("nan")) is None
