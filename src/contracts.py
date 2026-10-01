@@ -14,6 +14,8 @@ class RunTelemetry(BaseModel):
     llm_calls: int | None = None
     tool_calls: int | None = None
     tool_names: list[str] = Field(default_factory=list)
+    architecture: str | None = None
+    latency_ms: float | None = None
 
 
 class ProcurementDecision(BaseModel):

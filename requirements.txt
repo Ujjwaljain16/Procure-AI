@@ -7,4 +7,4 @@ python-dotenv>=1.0,<2
 streamlit>=1.40,<2
 httpx>=0.27,<1
 pytest>=8.0,<9
-# Add the SDK for the model/provider you choose, e.g. openai / anthropic / google-genai.
+google-genai>=1.0,<2

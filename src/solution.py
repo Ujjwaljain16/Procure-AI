@@ -7,10 +7,13 @@ def handle_request(request_id: str, architecture: Architecture = "single") -> Pr
     """Assessment adapter.
 
     Keep this function callable by the public/hidden evaluation harness.
-    Your internal implementation may use any framework, modules, agents, tools,
-    deterministic checks, or orchestration strategy.
     """
-    raise NotImplementedError(
-        "Implement handle_request(...) as part of Assessment 3. "
-        "Return a ProcurementDecision-compatible object."
-    )
+    if architecture == "single":
+        from src.agent.single_agent import run_single_agent
+
+        return run_single_agent(request_id)
+    if architecture == "staged":
+        from src.agent.staged_agent import run_staged_agent
+
+        return run_staged_agent(request_id)
+    raise ValueError(f"Unknown architecture: {architecture!r}")
