@@ -1,0 +1,117 @@
+{
+  "timestamp": "20260930T091330Z",
+  "test_set_version": "2026.09-tc1",
+  "single_aggregate": {
+    "total_cases": 6,
+    "cases_passed_expected_checks": 6,
+    "cases_errored": 0,
+    "latency_ms": {
+      "mean": 12349.81,
+      "median": 12392.85,
+      "max": 14869.94,
+      "p95": 14869.94
+    },
+    "llm_calls": {
+      "mean": 3.5,
+      "median": 3.5,
+      "max": 4,
+      "p95": 4
+    },
+    "tool_calls": {
+      "mean": 4.17,
+      "median": 4.0,
+      "max": 5,
+      "p95": 5
+    }
+  },
+  "staged_aggregate": {
+    "total_cases": 6,
+    "cases_passed_expected_checks": 5,
+    "cases_errored": 0,
+    "latency_ms": {
+      "mean": 20344.69,
+      "median": 20792.41,
+      "max": 27277.65,
+      "p95": 27277.65
+    },
+    "llm_calls": {
+      "mean": 5,
+      "median": 4.0,
+      "max": 7,
+      "p95": 7
+    },
+    "tool_calls": {
+      "mean": 3.67,
+      "median": 4.0,
+      "max": 4,
+      "p95": 4
+    }
+  },
+  "deterministic_consistency_failures_total": 1,
+  "rows": [
+    {
+      "case_id": "TC-01",
+      "category": "normal_low_cost",
+      "level": "agent",
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "TC-03",
+      "category": "existing_tool_overlap",
+      "level": "agent",
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "TC-05",
+      "category": "source_code_access",
+      "level": "agent",
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "TC-10",
+      "category": "expired_and_conflicting_vendor",
+      "level": "agent",
+      "single_passed": true,
+      "staged_passed": false,
+      "single_failures": [],
+      "staged_failures": [
+        "missing risk flag: conflicting_vendor_evidence"
+      ],
+      "deterministic_consistency_diffs": [
+        "risk_flags differ: single=['existing_tool_overlap', 'conflicting_vendor_evidence', 'security_review_required'] staged=['existing_tool_overlap', 'vendor_risk_unavailable', 'security_review_required']"
+      ]
+    },
+    {
+      "case_id": "TC-11",
+      "category": "unavailable_vendor_api",
+      "level": "agent",
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "TC-12",
+      "category": "missing_required_fields_and_injection",
+      "level": "agent",
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    }
+  ]
+}

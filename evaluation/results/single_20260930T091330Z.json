@@ -1,0 +1,240 @@
+{
+  "timestamp": "20260930T091330Z",
+  "architecture": "single",
+  "mode": "real",
+  "model": "gemini-2.5-flash",
+  "test_set_version": "2026.09-tc1",
+  "aggregate": {
+    "total_cases": 6,
+    "cases_passed_expected_checks": 6,
+    "cases_errored": 0,
+    "latency_ms": {
+      "mean": 12349.81,
+      "median": 12392.85,
+      "max": 14869.94,
+      "p95": 14869.94
+    },
+    "llm_calls": {
+      "mean": 3.5,
+      "median": 3.5,
+      "max": 4,
+      "p95": 4
+    },
+    "tool_calls": {
+      "mean": 4.17,
+      "median": 4.0,
+      "max": 5,
+      "p95": 5
+    }
+  },
+  "per_case": {
+    "TC-01": {
+      "actual": {
+        "recommendation": "Automated analysis unavailable (ServerError); manual review required.",
+        "next_step": "A human reviewer should evaluate this request manually using the collected evidence and policy result.",
+        "required_approvals": [
+          "Manager",
+          "Privacy"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "privacy_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 7,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service",
+          "purchase_history",
+          "purchase_history"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 5,
+        "latency_ms": 8812.516099999812,
+        "rationale": null,
+        "gemini_unavailable_reason": "ServerError"
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-03": {
+      "actual": {
+        "recommendation": "Proceed with review and required approvals for an existing catalog item.",
+        "next_step": "Initiate the approval workflow to address the existing tool overlap and privacy review, obtaining approvals from the Department Head, Procurement, and Privacy teams.",
+        "required_approvals": [
+          "Department Head",
+          "Procurement",
+          "Privacy"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "privacy_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 4,
+        "tool_calls": 4,
+        "latency_ms": 14277.948800000559,
+        "rationale": "The requested software, TaskFlow Pro by TaskFlow, is an approved item in the software catalog for project and task management (E3). The vendor, TaskFlow, is also approved by both procurement and security, with a recent security review (E4, E5). The annual cost of $8000 is within the Marketing department's $15000 available software budget (E1, E2). However, the policy engine indicates an existing tool overlap and requires a privacy review due to the data access level, necessitating approvals from the Department Head, Procurement, and Privacy.",
+        "gemini_unavailable_reason": null
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-05": {
+      "actual": {
+        "recommendation": "Proceed with required human review and approvals",
+        "next_step": "Forward the request to the Engineering Department Head for review and initial approval, followed by Finance, Procurement, and Security for their respective reviews and approvals.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "security_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "vendor_registry",
+          "vendor_risk_service",
+          "software_catalog"
+        ],
+        "llm_calls": 4,
+        "tool_calls": 4,
+        "latency_ms": 11352.729000000181,
+        "rationale": "The vendor CodeMate is approved (E3, E4) and the product 'CodeMate' is an approved AI coding assistant in the catalog (E5). The requested annual cost of $18,000 is within the Engineering department's available software budget of $26,000 (E1, E2). However, the policy evaluation requires approvals from the Department Head, Finance, Procurement, and Security. The policy also identified 'existing_tool_overlap' and 'security_review_required' risk flags, necessitating human review.",
+        "gemini_unavailable_reason": null
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-10": {
+      "actual": {
+        "recommendation": "Further review required due to conflicting vendor security status and potential existing tool overlap.",
+        "next_step": "Route the request to the Security and Procurement teams for review of the conflicting vendor security evidence and potential existing tool overlap, as human review is required by policy.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "conflicting_vendor_evidence",
+          "security_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 6,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 4,
+        "latency_ms": 11360.10720000013,
+        "rationale": "The request for SignalWatch Advanced is within the Engineering department's budget (E1, E2) and an existing catalog entry for SignalWatch is approved (E3). However, there is conflicting evidence regarding the vendor's security status: the vendor registry shows an approved status with a future review date (E4), but the vendor-risk service reports an expired security review (E5, E6). This conflict, alongside the flagged existing tool overlap, necessitates human review and approval from Security and Procurement.",
+        "gemini_unavailable_reason": null
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-11": {
+      "actual": {
+        "recommendation": "Proceed with reviews for a new Legal AI tool from NimbusAI, noting pending security and legal assessments.",
+        "next_step": "Initiate the required Department Head, Finance, Procurement, Security, and Legal approvals, with particular attention to the vendor's security review and legal review due to the new vendor status and data access level.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security",
+          "Legal"
+        ],
+        "risk_flags": [
+          "vendor_risk_unavailable",
+          "security_review_required",
+          "legal_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 6,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "vendor_registry",
+          "vendor_risk_service",
+          "software_catalog",
+          "purchase_history"
+        ],
+        "llm_calls": 4,
+        "tool_calls": 4,
+        "latency_ms": 14869.943199999398,
+        "rationale": "The requester, Noah Williams (E004) from Finance, has sufficient budget ($29000 available vs $15000 requested) for NimbusAI Contract Reviewer (E1, E2). There is no existing catalog overlap or purchase history for this product (E5, E6). NimbusAI is a new vendor with an unknown security status (E3), and the vendor-risk service was unavailable (E4). Therefore, Procurement, Security, and Legal reviews are required.",
+        "gemini_unavailable_reason": null
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-12": {
+      "actual": {
+        "recommendation": "Requires additional information and multiple reviews.",
+        "next_step": "Contact the requester to obtain the annual cost, number of users, and data access level for 'NeuralDesk Team Workspace'. Initiate Privacy and Legal reviews, and compare the requested product against the existing 'NeuralDesk Business' catalog entry to assess overlap and sensitive data handling.",
+        "required_approvals": [
+          "Privacy",
+          "Legal"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "privacy_review_required",
+          "legal_review_required",
+          "missing_information",
+          "prompt_injection_detected"
+        ],
+        "missing_information": [
+          "annual cost",
+          "number of users/licenses",
+          "data-access level"
+        ],
+        "human_review_required": true,
+        "evidence_count": 6,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service",
+          "purchase_history"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 4,
+        "latency_ms": 13425.593599999956,
+        "rationale": "The request is missing critical information, specifically the annual cost, number of users, and data access level. There is an existing, limited-use product (NeuralDesk Business) from the same vendor in the software catalog with sensitive data restrictions, indicating potential overlap and privacy considerations. The request also requires Privacy and Legal approvals and has multiple risk flags related to these concerns.",
+        "gemini_unavailable_reason": null
+      },
+      "expected_check_failures": [],
+      "error": null
+    }
+  }
+}

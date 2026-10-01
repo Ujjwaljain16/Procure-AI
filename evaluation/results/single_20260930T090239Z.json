@@ -1,0 +1,711 @@
+{
+  "timestamp": "20260930T090239Z",
+  "architecture": "single",
+  "mode": "replay",
+  "model": "gemini-2.5-flash",
+  "test_set_version": "2026.09-tc1",
+  "aggregate": {
+    "total_cases": 25,
+    "cases_passed_expected_checks": 25,
+    "cases_errored": 0,
+    "latency_ms": {
+      "mean": 14.75,
+      "median": 13.51,
+      "max": 37.7,
+      "p95": 33.03
+    },
+    "llm_calls": {
+      "mean": 1.56,
+      "median": 3,
+      "max": 3,
+      "p95": 3
+    },
+    "tool_calls": {
+      "mean": 1.56,
+      "median": 3,
+      "max": 3,
+      "p95": 3
+    }
+  },
+  "per_case": {
+    "TC-01": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Manager",
+          "Privacy"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "privacy_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 13.510300000234565
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-02": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Manager",
+          "Privacy"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "privacy_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 25.770899999770336
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-03": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Procurement",
+          "Privacy"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "privacy_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 29.665299999578565
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-04": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security",
+          "Privacy",
+          "Legal"
+        ],
+        "risk_flags": [
+          "security_review_required",
+          "privacy_review_required",
+          "legal_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 31.807600000320235
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-05": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "security_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 28.447200000300654
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-06": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Procurement",
+          "Security",
+          "Privacy",
+          "Legal"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "security_review_required",
+          "privacy_review_required",
+          "legal_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 30.935900000258698
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-07": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Procurement",
+          "Security",
+          "Privacy",
+          "Legal"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "security_review_required",
+          "privacy_review_required",
+          "legal_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 33.02639999947132
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-08": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security",
+          "Privacy",
+          "Legal"
+        ],
+        "risk_flags": [
+          "budget_insufficient",
+          "security_review_required",
+          "privacy_review_required",
+          "legal_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 31.246800000189978
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-09": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security",
+          "Privacy",
+          "Legal"
+        ],
+        "risk_flags": [
+          "budget_insufficient",
+          "security_review_required",
+          "privacy_review_required",
+          "legal_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 23.321699999542034
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-10": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "conflicting_vendor_evidence",
+          "security_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 6,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 26.608000000123866
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-11": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security",
+          "Legal"
+        ],
+        "risk_flags": [
+          "vendor_risk_unavailable",
+          "security_review_required",
+          "legal_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 26.80190000046423
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-12": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Privacy",
+          "Legal"
+        ],
+        "risk_flags": [
+          "existing_tool_overlap",
+          "privacy_review_required",
+          "legal_review_required",
+          "missing_information"
+        ],
+        "missing_information": [
+          "annual cost",
+          "number of users/licenses",
+          "data-access level"
+        ],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 28.98670000013226
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-13": {
+      "actual": {
+        "recommendation": "Route to the reviewers/approvals indicated by the policy evaluation (replay stand-in).",
+        "next_step": "Apply the required approvals and address any missing information before proceeding.",
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement",
+          "Security",
+          "Privacy",
+          "Legal"
+        ],
+        "risk_flags": [
+          "budget_insufficient",
+          "security_review_required",
+          "privacy_review_required",
+          "legal_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": 5,
+        "evidence_sources": [
+          "employee_data",
+          "budget_data",
+          "software_catalog",
+          "vendor_registry",
+          "vendor_risk_service"
+        ],
+        "llm_calls": 3,
+        "tool_calls": 3,
+        "latency_ms": 37.69970000030298
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-14": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Manager"
+        ],
+        "risk_flags": [
+          "missing_information"
+        ],
+        "missing_information": [
+          "department",
+          "department budget"
+        ],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.11869999980262946
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-15": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Manager"
+        ],
+        "risk_flags": [
+          "missing_information"
+        ],
+        "missing_information": [
+          "department budget"
+        ],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.06459999985963805
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-16a": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Manager"
+        ],
+        "risk_flags": [],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.1032999998642481
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-16b": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Department Head",
+          "Procurement"
+        ],
+        "risk_flags": [],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.07420000019919826
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-16c": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Department Head",
+          "Procurement"
+        ],
+        "risk_flags": [],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.061499999901570845
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-16d": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement"
+        ],
+        "risk_flags": [],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.08119999984046444
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-16e": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "Procurement"
+        ],
+        "risk_flags": [],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.07579999964946182
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-16f": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Department Head",
+          "Finance",
+          "CFO",
+          "Procurement"
+        ],
+        "risk_flags": [],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.0656000001981738
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-17a": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Manager"
+        ],
+        "risk_flags": [],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.06550000034621917
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-17b": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Manager",
+          "Security"
+        ],
+        "risk_flags": [
+          "vendor_review_expired",
+          "security_review_required"
+        ],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.06539999958476983
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-18a": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Department Head",
+          "Procurement"
+        ],
+        "risk_flags": [],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.0822000001790002
+      },
+      "expected_check_failures": [],
+      "error": null
+    },
+    "TC-18b": {
+      "actual": {
+        "recommendation": null,
+        "next_step": null,
+        "required_approvals": [
+          "Department Head",
+          "Procurement"
+        ],
+        "risk_flags": [],
+        "missing_information": [],
+        "human_review_required": true,
+        "evidence_count": null,
+        "evidence_sources": [],
+        "llm_calls": 0,
+        "tool_calls": 0,
+        "latency_ms": 0.08710000020073494
+      },
+      "expected_check_failures": [],
+      "error": null
+    }
+  }
+}
