@@ -6,6 +6,10 @@ identifiers, the deterministic policy fields, and run metadata. It holds no requ
 no model prose, no API key, and no personal data beyond the requester identifier that the
 request itself carries.
 
+Provenance: git_revision is HEAD; worktree_dirty is true when tracked files differ from HEAD. Both are
+recorded so a run from uncommitted changes is never mistaken for a run from a commit. Neither changes the
+analysis.
+
 Location: PROCUREAI_AUDIT_LOG if set, else runs/audit.jsonl (git-ignored). Writing the log is
 best-effort: a failure to write never changes the decision shown to the user.
 """
@@ -20,6 +24,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+
+from src.policy_engine import POLICY_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +53,26 @@ def git_revision() -> Optional[str]:
         return None
 
 
+def worktree_dirty() -> Optional[bool]:
+    """True when tracked files differ from HEAD (uncommitted local modifications). Provenance only: it never
+    changes the analysis. Only the boolean is recorded; no changed-file list and no diff."""
+    try:
+        result = subprocess.run(["git", "diff", "--quiet", "HEAD", "--"], cwd=ROOT, capture_output=True, timeout=10)
+        return result.returncode != 0
+    except Exception:
+        return None
+
+
+def error_class_for(run_status: str) -> Optional[str]:
+    """The exception or failure class carried by a run status, or None for a successful run."""
+    if run_status == "ok":
+        return None
+    if run_status == "timeout":
+        return "TimeoutError"
+    _, _, detail = run_status.partition(":")
+    return detail or None
+
+
 def evidence_ids_for(decision, registry) -> list[str]:
     """Identifiers of the evidence items the final decision cites, in the registry's own ID scheme."""
     if decision is None or registry is None:
@@ -67,6 +93,7 @@ def build_record(
     registry=None,
     model: Optional[str] = None,
     revision: Optional[str] = None,
+    dirty: Optional[bool] = None,
     now: Optional[datetime] = None,
 ) -> dict[str, Any]:
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -76,8 +103,11 @@ def build_record(
         "input_hash": input_hash(raw_request) if raw_request is not None else None,
         "architecture": architecture,
         "model": model,
+        "policy_version": POLICY_VERSION,
         "git_revision": revision if revision is not None else git_revision(),
+        "worktree_dirty": dirty if dirty is not None else worktree_dirty(),
         "run_status": status,
+        "error_class": error_class_for(status),
         "evidence_ids": evidence_ids_for(decision, registry),
     }
     if decision is not None:

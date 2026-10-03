@@ -40,9 +40,11 @@ def test_record_holds_the_minimal_fields_and_no_prose_or_secrets(monkeypatch):
         decision=result.decision, registry=result.registry, model="gemini-2.5-flash", revision="abc1234",
     )
     assert set(record) == {
-        "timestamp", "request_id", "input_hash", "architecture", "model", "git_revision", "run_status",
-        "evidence_ids", "required_approvals", "risk_flags", "missing_information", "human_review_required",
+        "timestamp", "request_id", "input_hash", "architecture", "model", "policy_version", "git_revision",
+        "worktree_dirty", "run_status", "error_class", "evidence_ids", "required_approvals", "risk_flags",
+        "missing_information", "human_review_required",
     }
+    assert record["policy_version"] == "2026.09"
     text = json.dumps(record)
     assert SENTINEL_KEY not in text
     assert raw["business_justification"] not in text  # request prose never stored
@@ -144,3 +146,32 @@ def test_the_dotenv_detector_actually_fires_on_a_loader(tmp_path):
     other.write_text("import os\nprint(os.environ.get('X'))\n", encoding="utf-8")
     assert _imports_dotenv(loader) is True
     assert _imports_dotenv(other) is False
+
+
+# --- provenance and error class -------------------------------------------------------------------
+
+
+def test_dirty_worktree_is_recorded_and_never_changes_the_run_status(monkeypatch):
+    raw = data_access.get_request("REQ-1001")
+    clean = audit.build_record(request_id="REQ-1001", raw_request=raw, architecture="single", status="ok",
+                               revision="69e483d", dirty=False)
+    dirty = audit.build_record(request_id="REQ-1001", raw_request=raw, architecture="single", status="ok",
+                               revision="69e483d", dirty=True)
+    assert clean["worktree_dirty"] is False and dirty["worktree_dirty"] is True
+    assert clean["run_status"] == dirty["run_status"] == "ok"
+    assert clean["git_revision"] == dirty["git_revision"] == "69e483d"
+
+
+def test_error_class_is_taken_from_the_run_status():
+    assert audit.error_class_for("ok") is None
+    assert audit.error_class_for("timeout") == "TimeoutError"
+    assert audit.error_class_for("degraded:GeminiConfigurationError") == "GeminiConfigurationError"
+    assert audit.error_class_for("rejected:MalformedRequestError") == "MalformedRequestError"
+    assert audit.error_class_for("unexpected_error:ValueError") == "ValueError"
+
+
+def test_worktree_dirty_is_a_boolean_or_none_and_records_no_file_names():
+    value = audit.worktree_dirty()
+    assert value in (True, False, None)
+    record = audit.build_record(request_id="REQ-1001", raw_request=None, architecture="single", status="ok", revision="x")
+    assert all(not str(v).endswith((".py", ".md")) for v in record.values() if isinstance(v, str))
