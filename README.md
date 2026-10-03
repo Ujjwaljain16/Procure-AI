@@ -10,8 +10,9 @@ An internal procurement decision-support tool: an employee submits a software or
 CURRENT SUBMISSION
   ├── Architecture ............... docs/architecture.md  (and "Architecture" below)
   ├── Current evaluation ......... docs/final_evaluation.md  (and "Evaluation" below)
-  ├── Architecture comparison .... "Results" and "Architecture Decision" below
-  └── Final ship decision ........ docs/architecture_decision.md
+  ├── Architecture comparison .... "Architecture comparison" below
+  ├── Final ship decision ........ docs/architecture_decision.md
+  └── Starter pack fixes ......... docs/starter_pack_fixes.md
 
 ARCHIVE
   ├── Results index .............. evaluation/results/INDEX.md (replay) and evaluation/correctness/results/INDEX.md (live)
@@ -176,6 +177,21 @@ The evaluation has four layers, kept separate so that no layer is read as eviden
 **Limits.** The live result is one run of 16 cases. It is descriptive and makes no significance claim. The live model issued supplemental tool lookups in both architectures, which the offline contract did not predict.
 
 Earlier live runs are indexed in `evaluation/correctness/results/INDEX.md`. The Gemini sample `correctness_real_20261003T122905Z.json` is an earlier eight-case run on direct Gemini. Failed attempts are archived and are not results.
+
+## Architecture comparison
+
+Both architectures use the same evidence preflight, policy engine, validator, and human handoff, on the same test sets. They differ only in orchestration.
+
+| | Architecture A (single agent) | Architecture B (analyst, then reviewer) |
+|---|---|---|
+| Offline correctness, 26 cases × 4 modes | No failing dimensions; identical deterministic outputs in 104 of 104 runs | Same |
+| Frozen replay, 25 cases | 25/25 expected checks; zero deterministic differences from B | Same |
+| Live run, 16 pre-registered cases | 16/16 recommendation and next action; 16/16 evidence grounding | 16/16 recommendation and next action; 16/16 evidence grounding; no regression |
+| Median latency (live) | 18.2 s | 24.4 s |
+| Median logical LLM calls (live) | 3 | 4 |
+| Median tool calls (live) | 8 | 8 |
+
+**Reading.** B showed no measured quality benefit over A on these cases, and it costs more time and one more model call per case. The pre-registered rule (`docs/preregistration_b_rule.md`) therefore selects A. This is one run of 16 cases, so it is descriptive and makes no significance claim.
 
 ## Edge Case Coverage
 
