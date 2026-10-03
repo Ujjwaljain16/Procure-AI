@@ -1,0 +1,235 @@
+{
+  "version": "2026.10-ext1",
+  "frozen_at": "2026-10-01",
+  "notes": "A separate, additional case set -- never merges into or replaces evaluation/cases.json (2026.09-tc1), which stays frozen so every number already reported in docs/architecture_comparison.md and docs/final_evaluation.md remains reproducible against it forever. This is a first increment of targeted boundary/trigger coverage identified as genuinely untested by the frozen set (grounded in data/procurement_policy.md and src/policy_engine.py), not a rushed attempt at a large stretch dataset -- 12 well-reasoned cases, extend further if time allows. All policy-level, run the same way as evaluation/cases.json's policy-level cases (synthetic PolicyContext, no tools/Gemini).",
+  "cases": [
+    {
+      "case_id": "EXT-01",
+      "category": "production_or_cloud_integration_trigger",
+      "level": "policy",
+      "notes": "data_access_level is plain internal_documents (no PII keyword), but requested_integrations names a production deployment -- POL-5's production/cloud-account trigger, independent of source_code_access, not exercised anywhere in the frozen set.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-01", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "PixelCraft", "annual_cost_usd": "2000", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "internal_documents", "requested_integrations": ["Production deployment pipeline"]},
+        "budget_available_usd": "50000",
+        "vendor_registry": {"vendor_name": "PixelCraft", "procurement_status": "Approved", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Approved"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "required_approvals_include": ["Security", "Department Head", "Procurement"],
+        "risk_flags_include": ["security_review_required"],
+        "risk_flags_exclude": ["privacy_review_required", "legal_review_required", "budget_insufficient"],
+        "human_review_required": true
+      },
+      "tags": ["security_threshold"]
+    },
+    {
+      "case_id": "EXT-02",
+      "category": "confidential_documents_trigger",
+      "level": "policy",
+      "notes": "data_access_level names confidential documents, no PII keyword -- POL-5's confidential-document trigger in isolation.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-02", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "PixelCraft", "annual_cost_usd": "500", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "confidential documents", "requested_integrations": []},
+        "budget_available_usd": "50000",
+        "vendor_registry": {"vendor_name": "PixelCraft", "procurement_status": "Approved", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Approved"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "required_approvals_include": ["Security", "Manager"],
+        "risk_flags_include": ["security_review_required"],
+        "risk_flags_exclude": ["privacy_review_required", "legal_review_required"],
+        "human_review_required": true
+      },
+      "tags": ["security_threshold"]
+    },
+    {
+      "case_id": "EXT-03",
+      "category": "credentials_or_secrets_trigger",
+      "level": "policy",
+      "notes": "data_access_level names credentials -- POL-5's credentials/secrets trigger in isolation.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-03", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "PixelCraft", "annual_cost_usd": "500", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "credentials", "requested_integrations": []},
+        "budget_available_usd": "50000",
+        "vendor_registry": {"vendor_name": "PixelCraft", "procurement_status": "Approved", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Approved"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "required_approvals_include": ["Security", "Manager"],
+        "risk_flags_include": ["security_review_required"],
+        "risk_flags_exclude": ["privacy_review_required", "legal_review_required"],
+        "human_review_required": true
+      },
+      "tags": ["security_threshold"]
+    },
+    {
+      "case_id": "EXT-04",
+      "category": "cross_region_storage_without_pii",
+      "level": "policy",
+      "notes": "No PII anywhere (data_access_level is plain, processes_personal_data is false), but the vendor-risk service reports stores_data_outside_region=true -- both POL-6 (privacy) and POL-7 (legal) independently trigger on cross-region storage alone, per src/policy_engine.py's _check_privacy/_check_legal; POL-5 (security) is correctly NOT triggered, since cross-region isn't one of the security keyword triggers.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-04", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "PixelCraft", "annual_cost_usd": "3000", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "internal_documents", "requested_integrations": []},
+        "budget_available_usd": "50000",
+        "vendor_registry": {"vendor_name": "PixelCraft", "procurement_status": "Approved", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Approved"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": true},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "required_approvals_include": ["Privacy", "Legal", "Department Head", "Procurement"],
+        "risk_flags_include": ["privacy_review_required", "legal_review_required"],
+        "risk_flags_exclude": ["security_review_required", "budget_insufficient"],
+        "human_review_required": true
+      },
+      "tags": ["privacy_threshold", "legal_threshold"]
+    },
+    {
+      "case_id": "EXT-05",
+      "category": "legal_nonstandard_terms_independent_of_spend",
+      "level": "policy",
+      "notes": "New vendor but annual spend is well under the $10,000 legal threshold -- legal review must still trigger, because legal_terms_status is non-standard ('Pending'), a condition POL-7 treats as independent of the spend-based trigger. Not exercised by TC-09 (which combines new-vendor status with spend >= $10k).",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-05", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "NewCo", "annual_cost_usd": "2000", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "internal_documents", "requested_integrations": []},
+        "budget_available_usd": "50000",
+        "vendor_registry": {"vendor_name": "NewCo", "procurement_status": "New", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Pending"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "required_approvals_include": ["Legal", "Department Head", "Procurement"],
+        "risk_flags_include": ["legal_review_required"],
+        "risk_flags_exclude": ["budget_insufficient", "security_review_required"],
+        "human_review_required": true
+      },
+      "tags": ["legal_threshold"]
+    },
+    {
+      "case_id": "EXT-06",
+      "category": "new_vendor_low_spend_standard_terms_no_legal_trigger",
+      "level": "policy",
+      "notes": "Negative/boundary case: a new vendor alone, with standard legal terms and spend under $10,000, must NOT trigger legal review -- confirms POL-7's new-vendor trigger genuinely requires the spend threshold, it isn't 'any new vendor' in disguise.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-06", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "NewCo", "annual_cost_usd": "2000", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "internal_documents", "requested_integrations": []},
+        "budget_available_usd": "50000",
+        "vendor_registry": {"vendor_name": "NewCo", "procurement_status": "New", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Approved"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "risk_flags_exclude": ["legal_review_required", "budget_insufficient", "security_review_required", "privacy_review_required"],
+        "human_review_required": true
+      },
+      "tags": ["legal_threshold"]
+    },
+    {
+      "case_id": "EXT-07",
+      "category": "budget_exactly_equal_to_cost",
+      "level": "policy",
+      "notes": "annual_cost_usd exactly equals the department's available budget -- POL-2 says 'within available budget' continues review, so equal must NOT be budget_insufficient.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-07", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "PixelCraft", "annual_cost_usd": "5000.00", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "internal_documents", "requested_integrations": []},
+        "budget_available_usd": "5000.00",
+        "vendor_registry": {"vendor_name": "PixelCraft", "procurement_status": "Approved", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Approved"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "risk_flags_exclude": ["budget_insufficient"],
+        "human_review_required": true
+      },
+      "tags": ["budget_threshold"]
+    },
+    {
+      "case_id": "EXT-08",
+      "category": "budget_one_cent_over_is_insufficient",
+      "level": "policy",
+      "notes": "annual_cost_usd is exactly one cent above the available budget -- must be flagged budget_insufficient, pairing with EXT-07 as the other side of the same boundary.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-08", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "PixelCraft", "annual_cost_usd": "5000.01", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "internal_documents", "requested_integrations": []},
+        "budget_available_usd": "5000.00",
+        "vendor_registry": {"vendor_name": "PixelCraft", "procurement_status": "Approved", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Approved"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "risk_flags_include": ["budget_insufficient"],
+        "human_review_required": true
+      },
+      "tags": ["budget_threshold", "threshold_boundary"]
+    },
+    {
+      "case_id": "EXT-09",
+      "category": "vendor_risk_context_entirely_absent",
+      "level": "policy",
+      "notes": "No vendor_registry and no vendor_risk evidence at all (both null, not merely 'unavailable') -- exercises evaluate_vendor_security_assessment's vendor_risk is None branch directly, distinct from TC-11 (a live 503 producing an explicit VendorRiskEvidence.unavailable()). Must resolve the same way: UNAVAILABLE, never inferred favorable.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-09", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "GhostVendor", "annual_cost_usd": "500", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "internal_documents", "requested_integrations": []},
+        "budget_available_usd": "50000",
+        "catalog_overlap": []
+      },
+      "expected": {
+        "required_approvals_include": ["Security", "Manager"],
+        "risk_flags_include": ["vendor_risk_unavailable", "security_review_required"],
+        "human_review_required": true
+      },
+      "tags": ["vendor_unavailable", "data_unavailable"]
+    },
+    {
+      "case_id": "EXT-10",
+      "category": "vendor_assessment_not_completed_status",
+      "level": "policy",
+      "notes": "The live vendor-risk service explicitly reports security_review_status='not_completed' -- the one AssessmentState the frozen set never exercises (TC-10/17 cover CONFLICTING/EXPIRED, TC-11/15 cover UNAVAILABLE).",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-10", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "NewCo", "annual_cost_usd": "500", "user_count": 3, "business_justification": "Standard tooling request.", "data_access_level": "internal_documents", "requested_integrations": []},
+        "budget_available_usd": "50000",
+        "vendor_risk": {"availability": "available", "security_review_status": "not_completed", "last_review_date": null, "processes_personal_data": false, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "required_approvals_include": ["Security", "Manager"],
+        "risk_flags_include": ["security_review_required"],
+        "risk_flags_exclude": ["vendor_risk_unavailable", "conflicting_vendor_evidence", "vendor_review_expired"],
+        "human_review_required": true
+      },
+      "tags": ["security_threshold"]
+    },
+    {
+      "case_id": "EXT-11",
+      "category": "maximum_simultaneous_triggers",
+      "level": "policy",
+      "notes": "Every trigger fires at once and at the highest cost tier: source-code access (security), customer PII (privacy), a new vendor with non-standard terms and spend over $25,000 (legal + CFO tier) -- a stress/comprehensiveness case distinct from TC-13's more modest budget+legal+privacy combination.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-11", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "NewCo", "annual_cost_usd": "30000", "user_count": 10, "business_justification": "Standard tooling request.", "data_access_level": "customer_pii, source_code", "requested_integrations": []},
+        "budget_available_usd": "50000",
+        "vendor_registry": {"vendor_name": "NewCo", "procurement_status": "New", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Pending"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": true, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "required_approvals_include": ["Security", "Privacy", "Legal", "Department Head", "Finance", "CFO", "Procurement"],
+        "risk_flags_include": ["security_review_required", "privacy_review_required", "legal_review_required"],
+        "risk_flags_exclude": ["budget_insufficient"],
+        "human_review_required": true
+      },
+      "tags": ["multi_risk", "security_threshold", "privacy_threshold", "legal_threshold"]
+    },
+    {
+      "case_id": "EXT-12",
+      "category": "missing_cost_and_justification",
+      "level": "policy",
+      "notes": "A different missing-fields combination than TC-12 (which is missing cost + user_count): here annual_cost_usd and business_justification are both null, user_count is present -- POL-1 must flag both missing items by name, not fabricate either.",
+      "synthetic_context": {
+        "request": {"request_id": "EXT-12", "requester_id": "E001", "department": "Marketing", "product_name": "Test Tool", "vendor_name": "PixelCraft", "annual_cost_usd": null, "user_count": 5, "business_justification": null, "data_access_level": "internal_documents", "requested_integrations": []},
+        "budget_available_usd": "50000",
+        "vendor_registry": {"vendor_name": "PixelCraft", "procurement_status": "Approved", "security_status": "Approved", "security_review_date": "2026-04-12", "legal_terms_status": "Approved"},
+        "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
+        "catalog_overlap": []
+      },
+      "expected": {
+        "missing_information_include": ["annual cost", "business purpose"],
+        "human_review_required": true
+      },
+      "tags": ["incomplete_request"]
+    }
+  ]
+}

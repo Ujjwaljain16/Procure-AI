@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import subprocess
 import sys
 import time
 from datetime import date, datetime, timezone
@@ -42,6 +43,7 @@ from src.agent.single_agent import run_single_agent_with_trace
 from src.agent.staged_agent import run_staged_agent_with_trace
 from src.agent.gemini_adapter import DEFAULT_MODEL
 from src.policy_engine import (
+    POLICY_VERSION,
     BudgetEvidence,
     CatalogMatch,
     PolicyContext,
@@ -53,9 +55,28 @@ from src.policy_engine import (
     to_decimal,
 )
 from evaluation.replay_client import ReplayGeminiClient
+from evaluation.safety_gate import evaluate_comparison_safety, evaluate_result_safety
 
 CASES_PATH = ROOT / "evaluation" / "cases.json"
 RESULTS_DIR = ROOT / "evaluation" / "results"
+
+
+def _git_revision() -> Optional[str]:
+    """Best-effort short commit hash for the benchmark manifest -- never
+    fatal (a shallow clone, a missing git binary, or running outside a repo
+    should not stop an evaluation run)."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+        return result.stdout.strip() or None
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -273,16 +294,19 @@ def _aggregate(per_case: dict) -> dict:
     }
 
 
-def _check_injection_pairs(cases: list[dict], all_results: dict) -> None:
+def _check_injection_pairs(cases: list[dict], all_results: dict) -> list[dict]:
     """Cross-case safety check: a case with 'pair_with' must produce
     byte-equivalent deterministic fields to its paired case (a benign vs.
     injected variant of the same otherwise-identical request), for every
-    architecture that was run. Printed directly rather than folded into the
-    per-case expected-check mechanism, since it compares two cases to each
-    other rather than one case to a fixed oracle.
+    architecture that was run. Compares two cases to each other rather than
+    one case to a fixed oracle, so it doesn't fit the per-case expected-check
+    mechanism -- returned as its own list (and printed by the caller) so it
+    can also be persisted into the comparison JSON and read by the safety
+    gate, instead of only ever appearing in stdout.
     """
     by_id = {c["case_id"]: c for c in cases}
     seen = set()
+    checks = []
     for case in cases:
         pair_id = case.get("pair_with")
         if not pair_id or case["case_id"] in seen or pair_id in seen:
@@ -290,7 +314,7 @@ def _check_injection_pairs(cases: list[dict], all_results: dict) -> None:
         seen.add(case["case_id"])
         seen.add(pair_id)
         if pair_id not in by_id:
-            print(f"WARNING: {case['case_id']} pairs with unknown case {pair_id}")
+            checks.append({"case_id": case["case_id"], "pair_with": pair_id, "architecture": None, "passed": False, "diffs": ["unknown paired case id"]})
             continue
         for architecture, results in all_results.items():
             a = results["per_case"][case["case_id"]]["actual"]
@@ -298,10 +322,27 @@ def _check_injection_pairs(cases: list[dict], all_results: dict) -> None:
             if a is None or b is None:
                 continue
             diffs = check_deterministic_fields_match(a, b)
-            status = "OK" if not diffs else "FAIL"
-            print(f"Injection pair check [{architecture}] {case['case_id']} vs {pair_id}: {status}")
-            for diff in diffs:
-                print(f"  - {diff}")
+            checks.append(
+                {
+                    "case_id": case["case_id"],
+                    "pair_with": pair_id,
+                    "architecture": architecture,
+                    "passed": not diffs,
+                    "diffs": diffs,
+                }
+            )
+    return checks
+
+
+def _print_injection_pair_checks(checks: list[dict]) -> None:
+    for check in checks:
+        if check["architecture"] is None:
+            print(f"WARNING: {check['case_id']} pairs with unknown case {check['pair_with']}")
+            continue
+        status = "OK" if check["passed"] else "FAIL"
+        print(f"Injection pair check [{check['architecture']}] {check['case_id']} vs {check['pair_with']}: {status}")
+        for diff in check["diffs"]:
+            print(f"  - {diff}")
 
 
 def main() -> None:
@@ -314,9 +355,16 @@ def main() -> None:
         help="With --real, use several API keys from $GEMINI_API_KEY_POOL (comma-separated), rotating on quota errors.",
     )
     parser.add_argument("--case-ids", default=None, help="Comma-separated case IDs to run instead of the full frozen set (for a small real-API sample).")
+    parser.add_argument(
+        "--cases-file",
+        default=None,
+        help="Path to an alternate cases JSON (e.g. evaluation/extended_cases.json). Defaults to the frozen evaluation/cases.json.",
+    )
     args = parser.parse_args()
 
-    cases = json.loads(CASES_PATH.read_text(encoding="utf-8"))["cases"]
+    cases_path = Path(args.cases_file) if args.cases_file else CASES_PATH
+    cases_data = json.loads(cases_path.read_text(encoding="utf-8"))
+    cases = cases_data["cases"]
     if args.case_ids:
         wanted = {c.strip() for c in args.case_ids.split(",")}
         cases = [c for c in cases if c["case_id"] in wanted]
@@ -332,6 +380,7 @@ def main() -> None:
     architectures = [args.architecture] if args.architecture else ["single", "staged"]
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    git_revision = _git_revision()
 
     all_results = {}
     for architecture in architectures:
@@ -343,17 +392,23 @@ def main() -> None:
             "architecture": architecture,
             "mode": "real" if args.real else "replay",
             "model": DEFAULT_MODEL,
-            "test_set_version": json.loads(CASES_PATH.read_text(encoding="utf-8"))["version"],
+            "test_set_version": cases_data["version"],
+            "git_revision": git_revision,
+            "policy_version": POLICY_VERSION,
             "aggregate": aggregate,
             "per_case": per_case,
         }
+        safety_gate = evaluate_result_safety(output)
+        output["safety_gate"] = safety_gate.to_dict()
         out_path = RESULTS_DIR / f"{architecture}_{timestamp}.json"
         out_path.write_text(json.dumps(output, indent=2, default=str), encoding="utf-8")
         print(f"  {aggregate['cases_passed_expected_checks']}/{aggregate['total_cases']} passed expected checks, {aggregate['cases_errored']} errored")
+        print(f"  SAFETY GATE: {'PASS' if safety_gate.passed else 'FAIL'} -- {safety_gate.detail}")
         print(f"  wrote {out_path.relative_to(ROOT)}")
         all_results[architecture] = output
 
-    _check_injection_pairs(cases, all_results)
+    injection_pair_checks = _check_injection_pairs(cases, all_results)
+    _print_injection_pair_checks(injection_pair_checks)
 
     if "single" in all_results and "staged" in all_results:
         comparison_rows = []
@@ -371,6 +426,7 @@ def main() -> None:
                     "case_id": case_id,
                     "category": case["category"],
                     "level": case["level"],
+                    "tags": case.get("tags", []),
                     "single_passed": a["error"] is None and not a["expected_check_failures"],
                     "staged_passed": b["error"] is None and not b["expected_check_failures"],
                     "single_failures": a["expected_check_failures"],
@@ -381,15 +437,21 @@ def main() -> None:
         comparison = {
             "timestamp": timestamp,
             "test_set_version": all_results["single"]["test_set_version"],
+            "git_revision": git_revision,
+            "policy_version": POLICY_VERSION,
             "single_aggregate": all_results["single"]["aggregate"],
             "staged_aggregate": all_results["staged"]["aggregate"],
             "deterministic_consistency_failures_total": consistency_failures_total,
+            "injection_pair_checks": injection_pair_checks,
             "rows": comparison_rows,
         }
+        comparison_safety_gate = evaluate_comparison_safety(comparison)
+        comparison["safety_gate"] = comparison_safety_gate.to_dict()
         out_path = RESULTS_DIR / f"comparison_{timestamp}.json"
         out_path.write_text(json.dumps(comparison, indent=2, default=str), encoding="utf-8")
         print(f"\nComparison written to {out_path.relative_to(ROOT)}")
         print(f"Deterministic A-vs-B consistency failures: {consistency_failures_total}/{len(cases)} cases")
+        print(f"SAFETY GATE: {'PASS' if comparison_safety_gate.passed else 'FAIL'} -- {comparison_safety_gate.detail}")
 
 
 if __name__ == "__main__":

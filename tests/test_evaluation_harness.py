@@ -15,9 +15,11 @@ from evaluation.run_comparison import (
     check_expected,
     run_case,
 )
+from src.policy_engine import evaluate_policy
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = json.loads((ROOT / "evaluation" / "cases.json").read_text(encoding="utf-8"))["cases"]
+EXTENDED_CASES = json.loads((ROOT / "evaluation" / "extended_cases.json").read_text(encoding="utf-8"))["cases"]
 
 
 class TestCasesFileIsWellFormed:
@@ -46,6 +48,54 @@ class TestCasesFileIsWellFormed:
         for case in CASES:
             if case.get("pair_with"):
                 assert case["pair_with"] in ids, case["case_id"]
+
+    def test_every_case_has_at_least_one_scenario_tag(self):
+        for case in CASES:
+            assert case.get("tags"), case["case_id"]
+
+
+class TestExtendedCasesFileIsWellFormed:
+    """evaluation/extended_cases.json -- a separate, additional case set that
+    never merges into the frozen evaluation/cases.json (2026.09-tc1)."""
+
+    def test_has_its_own_version_distinct_from_the_frozen_set(self):
+        frozen_version = json.loads((ROOT / "evaluation" / "cases.json").read_text(encoding="utf-8"))["version"]
+        extended_version = json.loads((ROOT / "evaluation" / "extended_cases.json").read_text(encoding="utf-8"))["version"]
+        assert extended_version != frozen_version
+
+    def test_case_ids_do_not_collide_with_the_frozen_set(self):
+        frozen_ids = {c["case_id"] for c in CASES}
+        extended_ids = {c["case_id"] for c in EXTENDED_CASES}
+        assert not (frozen_ids & extended_ids)
+
+    def test_every_case_has_a_unique_id(self):
+        ids = [c["case_id"] for c in EXTENDED_CASES]
+        assert len(ids) == len(set(ids))
+
+    def test_every_case_is_policy_level_with_a_synthetic_context(self):
+        for case in EXTENDED_CASES:
+            assert case["level"] == "policy", case["case_id"]
+            assert "synthetic_context" in case, case["case_id"]
+
+    def test_every_case_has_tags(self):
+        for case in EXTENDED_CASES:
+            assert case.get("tags"), case["case_id"]
+
+    def test_every_case_matches_its_own_expected_block(self):
+        """The real correctness check: build each case's synthetic context,
+        run the actual evaluate_policy(), and confirm it matches what the
+        case file claims -- not just that the file is shaped correctly."""
+        for case in EXTENDED_CASES:
+            context = _build_synthetic_context(case["synthetic_context"])
+            evaluation = evaluate_policy(context)
+            actual = {
+                "required_approvals": list(evaluation.required_approvals),
+                "risk_flags": list(evaluation.risk_flags),
+                "missing_information": list(evaluation.missing_information),
+                "human_review_required": evaluation.human_review_required,
+            }
+            failures = check_expected(actual, case["expected"])
+            assert not failures, f"{case['case_id']}: {failures}"
 
 
 class TestReplayClientDeterminism:

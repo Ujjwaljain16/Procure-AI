@@ -1,0 +1,224 @@
+{
+  "timestamp": "20261001T115126Z",
+  "test_set_version": "2026.10-ext1",
+  "git_revision": "1660e28",
+  "policy_version": "2026.09",
+  "single_aggregate": {
+    "total_cases": 12,
+    "cases_passed_expected_checks": 12,
+    "cases_errored": 0,
+    "latency_ms": {
+      "mean": 0.03,
+      "median": 0.02,
+      "max": 0.07,
+      "p95": 0.03
+    },
+    "llm_calls": {
+      "mean": 0,
+      "median": 0.0,
+      "max": 0,
+      "p95": 0
+    },
+    "tool_calls": {
+      "mean": 0,
+      "median": 0.0,
+      "max": 0,
+      "p95": 0
+    }
+  },
+  "staged_aggregate": {
+    "total_cases": 12,
+    "cases_passed_expected_checks": 12,
+    "cases_errored": 0,
+    "latency_ms": {
+      "mean": 0.02,
+      "median": 0.02,
+      "max": 0.04,
+      "p95": 0.02
+    },
+    "llm_calls": {
+      "mean": 0,
+      "median": 0.0,
+      "max": 0,
+      "p95": 0
+    },
+    "tool_calls": {
+      "mean": 0,
+      "median": 0.0,
+      "max": 0,
+      "p95": 0
+    }
+  },
+  "deterministic_consistency_failures_total": 0,
+  "injection_pair_checks": [],
+  "rows": [
+    {
+      "case_id": "EXT-01",
+      "category": "production_or_cloud_integration_trigger",
+      "level": "policy",
+      "tags": [
+        "security_threshold"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-02",
+      "category": "confidential_documents_trigger",
+      "level": "policy",
+      "tags": [
+        "security_threshold"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-03",
+      "category": "credentials_or_secrets_trigger",
+      "level": "policy",
+      "tags": [
+        "security_threshold"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-04",
+      "category": "cross_region_storage_without_pii",
+      "level": "policy",
+      "tags": [
+        "privacy_threshold",
+        "legal_threshold"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-05",
+      "category": "legal_nonstandard_terms_independent_of_spend",
+      "level": "policy",
+      "tags": [
+        "legal_threshold"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-06",
+      "category": "new_vendor_low_spend_standard_terms_no_legal_trigger",
+      "level": "policy",
+      "tags": [
+        "legal_threshold"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-07",
+      "category": "budget_exactly_equal_to_cost",
+      "level": "policy",
+      "tags": [
+        "budget_threshold"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-08",
+      "category": "budget_one_cent_over_is_insufficient",
+      "level": "policy",
+      "tags": [
+        "budget_threshold",
+        "threshold_boundary"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-09",
+      "category": "vendor_risk_context_entirely_absent",
+      "level": "policy",
+      "tags": [
+        "vendor_unavailable",
+        "data_unavailable"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-10",
+      "category": "vendor_assessment_not_completed_status",
+      "level": "policy",
+      "tags": [
+        "security_threshold"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-11",
+      "category": "maximum_simultaneous_triggers",
+      "level": "policy",
+      "tags": [
+        "multi_risk",
+        "security_threshold",
+        "privacy_threshold",
+        "legal_threshold"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    },
+    {
+      "case_id": "EXT-12",
+      "category": "missing_cost_and_justification",
+      "level": "policy",
+      "tags": [
+        "incomplete_request"
+      ],
+      "single_passed": true,
+      "staged_passed": true,
+      "single_failures": [],
+      "staged_failures": [],
+      "deterministic_consistency_diffs": []
+    }
+  ],
+  "safety_gate": {
+    "passed": true,
+    "detail": "0 deterministic-field mismatches between architectures.",
+    "deterministic_consistency_failures": 0,
+    "invariants": []
+  }
+}

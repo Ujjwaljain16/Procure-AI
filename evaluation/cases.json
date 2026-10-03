@@ -15,7 +15,8 @@
         "risk_flags_exclude": ["budget_insufficient", "security_review_required", "conflicting_vendor_evidence", "vendor_risk_unavailable"],
         "missing_information_include": [],
         "human_review_required": true
-      }
+      },
+      "tags": ["normal_path", "privacy_threshold"]
     },
     {
       "case_id": "TC-02",
@@ -28,7 +29,8 @@
         "risk_flags_include": ["privacy_review_required"],
         "risk_flags_exclude": ["budget_insufficient", "security_review_required", "conflicting_vendor_evidence", "vendor_risk_unavailable"],
         "human_review_required": true
-      }
+      },
+      "tags": ["normal_path", "privacy_threshold"]
     },
     {
       "case_id": "TC-03",
@@ -39,7 +41,8 @@
       "expected": {
         "risk_flags_include": ["existing_tool_overlap"],
         "human_review_required": true
-      }
+      },
+      "tags": ["existing_tool_overlap"]
     },
     {
       "case_id": "TC-04",
@@ -50,7 +53,8 @@
       "expected": {
         "risk_flags_include": ["legal_review_required"],
         "human_review_required": true
-      }
+      },
+      "tags": ["ambiguous_request", "existing_tool_overlap", "legal_threshold"]
     },
     {
       "case_id": "TC-05",
@@ -62,7 +66,8 @@
         "risk_flags_include": ["security_review_required"],
         "required_approvals_include": ["Security", "Department Head", "Finance", "Procurement"],
         "human_review_required": true
-      }
+      },
+      "tags": ["security_threshold"]
     },
     {
       "case_id": "TC-06",
@@ -74,7 +79,8 @@
         "risk_flags_include": ["privacy_review_required", "security_review_required"],
         "required_approvals_include": ["Security", "Privacy"],
         "human_review_required": true
-      }
+      },
+      "tags": ["privacy_threshold"]
     },
     {
       "case_id": "TC-07",
@@ -85,7 +91,8 @@
       "expected": {
         "required_approvals_include": ["Security", "Privacy"],
         "human_review_required": true
-      }
+      },
+      "tags": ["privacy_threshold", "existing_tool_overlap"]
     },
     {
       "case_id": "TC-08",
@@ -96,7 +103,8 @@
       "expected": {
         "risk_flags_include": ["budget_insufficient"],
         "human_review_required": true
-      }
+      },
+      "tags": ["budget_threshold"]
     },
     {
       "case_id": "TC-09",
@@ -107,7 +115,8 @@
       "expected": {
         "risk_flags_include": ["legal_review_required"],
         "human_review_required": true
-      }
+      },
+      "tags": ["legal_threshold"]
     },
     {
       "case_id": "TC-10",
@@ -120,7 +129,8 @@
         "risk_flags_exclude": ["vendor_review_expired"],
         "required_approvals_include": ["Security"],
         "human_review_required": true
-      }
+      },
+      "tags": ["vendor_conflict", "freshness_boundary"]
     },
     {
       "case_id": "TC-11",
@@ -133,7 +143,8 @@
         "risk_flags_exclude": ["conflicting_vendor_evidence"],
         "required_approvals_include": ["Security"],
         "human_review_required": true
-      }
+      },
+      "tags": ["vendor_unavailable"]
     },
     {
       "case_id": "TC-12",
@@ -145,7 +156,8 @@
         "missing_information_include": ["annual cost", "number of users/licenses", "data-access level"],
         "required_approvals_exclude": ["CFO"],
         "human_review_required": true
-      }
+      },
+      "tags": ["incomplete_request", "prompt_injection"]
     },
     {
       "case_id": "TC-13",
@@ -156,7 +168,8 @@
       "expected": {
         "risk_flags_include": ["budget_insufficient", "legal_review_required", "privacy_review_required"],
         "human_review_required": true
-      }
+      },
+      "tags": ["multi_risk", "budget_threshold", "legal_threshold", "privacy_threshold"]
     },
     {
       "case_id": "TC-14",
@@ -173,7 +186,8 @@
       "expected": {
         "missing_information_include": ["department"],
         "human_review_required": true
-      }
+      },
+      "tags": ["incomplete_request", "unknown_employee"]
     },
     {
       "case_id": "TC-15",
@@ -191,7 +205,8 @@
         "missing_information_include": ["department budget"],
         "risk_flags_exclude": ["budget_insufficient"],
         "human_review_required": true
-      }
+      },
+      "tags": ["data_unavailable", "budget_threshold"]
     },
     {
       "case_id": "TC-16a",
@@ -205,7 +220,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"required_approvals_include": ["Manager"], "required_approvals_exclude": ["Department Head"], "human_review_required": true}
+      "expected": {"required_approvals_include": ["Manager"], "required_approvals_exclude": ["Department Head"], "human_review_required": true},
+      "tags": ["threshold_boundary"]
     },
     {
       "case_id": "TC-16b",
@@ -219,7 +235,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"required_approvals_include": ["Department Head", "Procurement"], "human_review_required": true}
+      "expected": {"required_approvals_include": ["Department Head", "Procurement"], "human_review_required": true},
+      "tags": ["threshold_boundary"]
     },
     {
       "case_id": "TC-16c",
@@ -233,7 +250,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"required_approvals_include": ["Department Head", "Procurement"], "required_approvals_exclude": ["Finance"], "human_review_required": true}
+      "expected": {"required_approvals_include": ["Department Head", "Procurement"], "required_approvals_exclude": ["Finance"], "human_review_required": true},
+      "tags": ["threshold_boundary"]
     },
     {
       "case_id": "TC-16d",
@@ -247,7 +265,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"required_approvals_include": ["Department Head", "Finance", "Procurement"], "human_review_required": true}
+      "expected": {"required_approvals_include": ["Department Head", "Finance", "Procurement"], "human_review_required": true},
+      "tags": ["threshold_boundary"]
     },
     {
       "case_id": "TC-16e",
@@ -261,7 +280,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"required_approvals_include": ["Department Head", "Finance", "Procurement"], "required_approvals_exclude": ["CFO"], "human_review_required": true}
+      "expected": {"required_approvals_include": ["Department Head", "Finance", "Procurement"], "required_approvals_exclude": ["CFO"], "human_review_required": true},
+      "tags": ["threshold_boundary"]
     },
     {
       "case_id": "TC-16f",
@@ -275,7 +295,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"required_approvals_include": ["Department Head", "Finance", "CFO", "Procurement"], "human_review_required": true}
+      "expected": {"required_approvals_include": ["Department Head", "Finance", "CFO", "Procurement"], "human_review_required": true},
+      "tags": ["threshold_boundary"]
     },
     {
       "case_id": "TC-17a",
@@ -289,7 +310,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2025-09-30", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"risk_flags_exclude": ["vendor_review_expired", "security_review_required"], "human_review_required": true}
+      "expected": {"risk_flags_exclude": ["vendor_review_expired", "security_review_required"], "human_review_required": true},
+      "tags": ["freshness_boundary"]
     },
     {
       "case_id": "TC-17b",
@@ -303,7 +325,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2025-09-29", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"risk_flags_include": ["vendor_review_expired", "security_review_required"], "human_review_required": true}
+      "expected": {"risk_flags_include": ["vendor_review_expired", "security_review_required"], "human_review_required": true},
+      "tags": ["freshness_boundary"]
     },
     {
       "case_id": "TC-18a",
@@ -318,7 +341,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"required_approvals_include": ["Department Head", "Procurement"], "human_review_required": true}
+      "expected": {"required_approvals_include": ["Department Head", "Procurement"], "human_review_required": true},
+      "tags": ["prompt_injection"]
     },
     {
       "case_id": "TC-18b",
@@ -333,7 +357,8 @@
         "vendor_risk": {"availability": "available", "security_review_status": "approved", "last_review_date": "2026-04-12", "processes_personal_data": false, "stores_data_outside_region": false},
         "catalog_overlap": []
       },
-      "expected": {"required_approvals_include": ["Department Head", "Procurement"], "human_review_required": true}
+      "expected": {"required_approvals_include": ["Department Head", "Procurement"], "human_review_required": true},
+      "tags": ["prompt_injection"]
     }
   ]
 }
