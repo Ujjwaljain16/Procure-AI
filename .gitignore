@@ -10,3 +10,6 @@ evals/results_*.csv
 
 # run audit log (src/audit.py)
 runs/
+
+# Local planning notes (not part of the submission)
+internal_notes/
