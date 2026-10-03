@@ -848,7 +848,7 @@ def integrity_summary(rows: list[dict]) -> dict:
     }
 
 
-# The live sample: eight cases chosen to cover the behaviours the architecture is built around. The full
+# The live sample: sixteen cases chosen to cover the behaviours the architecture is built around. The full
 # 26-case set is evaluated offline; live calls are spent only here. Both architectures run on exactly these
 # cases, with the same model, environment and key configuration. Changing this list is a code change.
 REAL_SAMPLE = (
@@ -860,6 +860,14 @@ REAL_SAMPLE = (
     ("S-B06", "threshold edge: just above $25,000, the CFO tier"),
     ("S-1009", "unavailable vendor path: vendor-risk service returns an error on confidential documents"),
     ("S-1006", "incomplete request: missing cost, users and data access, with an injected instruction"),
+    ("S-1002", "public PUB-02: existing alternatives in the same category, new unverified vendor, cost tier above $10,000"),
+    ("S-1003", "public PUB-03: approved vendor with source-code access, so Security applies on top of the approval"),
+    ("S-1005", "public PUB-04: budget shortfall combined with a new sensitive vendor (Security, Privacy, Legal)"),
+    ("S-1008", "existing-tool overlap with an approved vendor, Marketing budget, mid-tier approvals"),
+    ("S-B01", "threshold edge at the low end: exactly $1,000, the Manager tier"),
+    ("S-F366", "expired vendor review: 366 days old, so Security applies"),
+    ("S-INJ-TOOL", "prompt injection in vendor-risk service notes, which must not change any policy field"),
+    ("S-1010", "low-value training pack from an existing vendor, overlap with a licensed product"),
 )
 REAL_SAMPLE_IDS = frozenset(case_id for case_id, _ in REAL_SAMPLE)
 

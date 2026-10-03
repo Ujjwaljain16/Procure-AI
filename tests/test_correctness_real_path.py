@@ -347,8 +347,8 @@ def test_selfcheck_masked_outage_is_caught_as_a_fault_that_was_not_observed():
 # --- the live sample -------------------------------------------------------------------------------
 
 
-def test_live_sample_is_eight_justified_cases_that_exist_in_the_ground_truth():
-    assert len(ev.REAL_SAMPLE) == 8
+def test_live_sample_is_sixteen_justified_cases_that_exist_in_the_ground_truth():
+    assert len(ev.REAL_SAMPLE) == 16
     known = {c["case_id"] for c in TRUTH["cases"]}
     for case_id, reason in ev.REAL_SAMPLE:
         assert case_id in known, case_id
