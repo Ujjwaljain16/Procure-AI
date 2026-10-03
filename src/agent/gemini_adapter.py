@@ -28,6 +28,7 @@ from src.agent.schemas import AgentSynthesis
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "gemini-2.5-flash"
+GENERATION_TEMPERATURE = 0.0  # recorded in every evaluation manifest; deterministic-leaning decoding
 
 
 class GeminiConfigurationError(Exception):
@@ -119,6 +120,7 @@ class GeminiClient:
         tool = self._build_tool(tool_specs) if tool_specs else None
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
+            temperature=GENERATION_TEMPERATURE,
             tools=[tool] if tool else None,
             automatic_function_calling=(
                 types.AutomaticFunctionCallingConfig(disable=True) if tool else None
@@ -132,6 +134,7 @@ class GeminiClient:
 
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
+            temperature=GENERATION_TEMPERATURE,
             response_mime_type="application/json",
             response_schema=AgentSynthesis,
         )

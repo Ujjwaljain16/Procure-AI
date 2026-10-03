@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from src.agent.gemini_adapter import DEFAULT_MODEL, GeminiClient, GeminiConfigurationError, ModelOutputError
+from src.agent.gemini_adapter import DEFAULT_MODEL, GENERATION_TEMPERATURE, GeminiClient, GeminiConfigurationError, ModelOutputError
 from src.agent.staged_schemas import AnalystReport
 
 
@@ -25,6 +25,7 @@ class StagedGeminiClient(GeminiClient):
 
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
+            temperature=GENERATION_TEMPERATURE,
             response_mime_type="application/json",
             response_schema=AnalystReport,
         )

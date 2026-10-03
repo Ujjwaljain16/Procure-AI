@@ -62,6 +62,26 @@ CASES_PATH = ROOT / "evaluation" / "cases.json"
 RESULTS_DIR = ROOT / "evaluation" / "results"
 
 
+def _sdk_version() -> Optional[str]:
+    try:
+        from importlib.metadata import version
+
+        return version("google-genai")
+    except Exception:
+        return None
+
+
+def _generation_config(use_real: bool) -> dict:
+    from src.agent.gemini_adapter import GENERATION_TEMPERATURE
+
+    return {
+        "model": DEFAULT_MODEL,
+        "temperature": GENERATION_TEMPERATURE,
+        "sdk_version": _sdk_version() if use_real else None,
+        "seed": "not supported by this endpoint",
+    }
+
+
 def _git_revision() -> Optional[str]:
     """Best-effort short commit hash for the benchmark manifest -- never
     fatal (a shallow clone, a missing git binary, or running outside a repo
@@ -393,10 +413,11 @@ def main() -> None:
             "timestamp": timestamp,
             "architecture": architecture,
             "mode": "real" if args.real else "replay",
-            "model": DEFAULT_MODEL,
+            "model": DEFAULT_MODEL if args.real else None,
             "test_set_version": cases_data["version"],
             "git_revision": git_revision,
             "policy_version": POLICY_VERSION,
+            "generation_config": _generation_config(args.real),
             "aggregate": aggregate,
             "per_case": per_case,
         }
@@ -441,6 +462,7 @@ def main() -> None:
             "test_set_version": all_results["single"]["test_set_version"],
             "git_revision": git_revision,
             "policy_version": POLICY_VERSION,
+            "generation_config": _generation_config(args.real),
             "single_aggregate": all_results["single"]["aggregate"],
             "staged_aggregate": all_results["staged"]["aggregate"],
             "deterministic_consistency_failures_total": consistency_failures_total,
