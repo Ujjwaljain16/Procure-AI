@@ -16,7 +16,6 @@ from src.agent.single_agent import run_single_agent_with_trace
 from src.agent.staged_agent import run_staged_agent_with_trace
 from src.agent.tools_registry import ToolRegistry
 from src.evidence import gather_mandatory_evidence
-from src.tools import vendor_risk as vendor_risk_tool
 from tests.agent_fakes import ScriptedGeminiClient, stop_turn, tool_call, tool_turn
 from tests.staged_agent_fakes import ScriptedStagedGeminiClient
 from tests.test_agent_single import _synthesis
@@ -24,16 +23,6 @@ from tests.test_staged_agent import _analyst_report
 
 ARCHITECTURES = ("single", "staged")
 POLICY_FIELDS = ("required_approvals", "risk_flags", "missing_information", "human_review_required")
-
-
-@pytest.fixture(autouse=True)
-def _no_network_vendor_service(monkeypatch):
-    def unavailable(name, timeout_seconds=3.0):
-        import requests
-
-        raise requests.ConnectionError("no vendor service in unit tests")
-
-    monkeypatch.setattr(vendor_risk_tool.vendor_client, "get_vendor_risk", unavailable)
 
 
 def _run(architecture, request_id, *, turns=(), structured=None, analyst=None, client_cls=None):

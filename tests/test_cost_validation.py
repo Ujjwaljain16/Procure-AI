@@ -70,7 +70,8 @@ def test_policy_money_normalizer_refuses_non_finite_values(value):
         to_decimal(value)
 
 
-def test_end_to_end_a_negative_cost_request_returns_a_decision_with_a_clarification_request(monkeypatch):
+def test_end_to_end_a_negative_cost_request_returns_a_decision_with_a_clarification_request(monkeypatch, live_vendor_records):
+    # live_vendor_records: the vendor-driven Privacy approval only exists when the vendor record is reachable.
     raw = {**data_access.get_request("REQ-1001"), "annual_cost_usd": -5000}
     monkeypatch.setattr(data_access, "get_request", lambda rid: raw)
     result = run_single_agent_with_trace("REQ-1001", client=ReplayGeminiClient(raw))
