@@ -175,3 +175,14 @@ def test_worktree_dirty_is_a_boolean_or_none_and_records_no_file_names():
     assert value in (True, False, None)
     record = audit.build_record(request_id="REQ-1001", raw_request=None, architecture="single", status="ok", revision="x")
     assert all(not str(v).endswith((".py", ".md")) for v in record.values() if isinstance(v, str))
+
+
+def test_banner_names_the_openai_compatible_route_when_only_its_key_is_set():
+    enabled, message = live_analysis_status({"CLOSEROUTER_API_KEY": "k", "CLOSEROUTER_MODEL": "m1"})
+    assert enabled is True
+    assert "OpenAI-compatible endpoint" in message and "m1" in message
+
+
+def test_direct_gemini_takes_precedence_over_the_openai_compatible_route():
+    enabled, message = live_analysis_status({"GEMINI_API_KEY": "g", "CLOSEROUTER_API_KEY": "c"})
+    assert message == "Live analysis: Enabled"
