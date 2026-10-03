@@ -386,3 +386,35 @@ def test_cli_real_rejects_a_single_architecture():
     with pytest.raises(SystemExit) as info:
         ev.main(["--real", "--arch", "single"])
     assert info.value.code == 2
+
+
+# --- independent HTTP counting and error capture (added before the live rerun) -------------------------
+
+
+def test_failed_http_call_is_recorded_by_class_and_code_without_message_text():
+    payload = real(modes=("outage",), cases={"S-1001"}, archs=("single",))
+    row = rows_for(payload, "S-1001", "single", "outage")
+    assert row["actual"]["http_error_codes"] == ["ConnectionError:None"]
+    assert all("unreachable" not in code for code in row["actual"]["http_error_codes"])
+
+
+def test_each_http_call_is_counted_at_the_sdk_boundary_and_matches_the_attempt_count():
+    payload = real(modes=("normal",), cases={"S-1001"}, archs=("staged",))
+    row = rows_for(payload, "S-1001", "staged", "normal")
+    assert row["actual"]["http_calls"] == row["actual"]["api_attempts"] == row["actual"]["logical_llm_calls"]
+    assert row["integrity"]["attempts_match_transport"] is True
+    assert row["actual"]["http_error_codes"] == []
+
+
+def test_selfcheck_a_lost_error_record_is_visible_in_the_row(monkeypatch):
+    """If the error capture is dropped, the outage row shows no error code, which is a visible difference."""
+
+    def counting_without_error_record(self, **kwargs):
+        self.calls += 1
+        return self._inner.models.generate_content(**kwargs)  # the failure propagates, but is not recorded
+
+    monkeypatch.setattr(ev._CountingTransport, "generate_content", counting_without_error_record)
+    payload = real(modes=("outage",), cases={"S-1001"}, archs=("single",))
+    row = rows_for(payload, "S-1001", "single", "outage")
+    assert row["actual"]["http_error_codes"] == []
+    assert row["actual"]["http_calls"] == 1  # the call is still counted, so the attempt check still holds

@@ -301,11 +301,51 @@ class TransportInfo:
 
     label: str
     http_calls: Callable[[], Optional[int]]
+    # Error class and status code of each failed HTTP call, e.g. "ClientError:429". Never message text.
+    http_errors: Callable[[], list] = lambda: []
+
+
+class _CountingTransport:
+    """Wraps the SDK's models object so every generate_content call that leaves the adapter is counted here,
+    independently of the adapter's own attempt counter, and every failure is recorded by class and code."""
+
+    def __init__(self, inner):
+        self._inner = inner
+        self.calls = 0
+        self.error_codes: list[str] = []
+        self.models = self
+
+    def generate_content(self, **kwargs):
+        self.calls += 1
+        try:
+            return self._inner.models.generate_content(**kwargs)
+        except Exception as exc:
+            code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+            self.error_codes.append(f"{type(exc).__name__}:{code}")
+            raise
+
+
+def _instrument(client) -> list:
+    """Wrap each underlying transport of a real adapter (or each key of a pool). Returns the counters."""
+    subs = client._clients if hasattr(client, "_clients") else [client]
+    counters = []
+    for sub in subs:
+        sub._client = _CountingTransport(sub._client)
+        counters.append(sub._client)
+    return counters
 
 
 def offline_factory(arch: str, mode: str, raw: dict):
     """Offline transport: the scripted stand-in above the adapter. Never constructs a real client."""
     return ModeClient(mode, raw), TransportInfo(OFFLINE_LABEL, lambda: None)
+
+
+def _info(label: str, counters: list) -> TransportInfo:
+    return TransportInfo(
+        label,
+        lambda: sum(c.calls for c in counters),
+        lambda: [e for c in counters for e in c.error_codes],
+    )
 
 
 def real_factory(make_transports: Optional[Callable[[str, str, dict], list]] = None):
@@ -323,10 +363,13 @@ def real_factory(make_transports: Optional[Callable[[str, str, dict], list]] = N
         if make_transports is None:
             if mode != "normal":
                 raise ValueError(f"fault mode '{mode}' needs a fake transport; live runs are normal mode only")
-            return _production_client(arch), TransportInfo(REAL_LABEL, lambda: None)
+            client = _production_client(arch)
+            counters = _instrument(client)
+            return client, _info(REAL_LABEL, counters)
         transports = make_transports(arch, mode, raw)
         client = _fake_boundary_client(arch, transports)
-        return client, TransportInfo(FAKE_BOUNDARY_LABEL, lambda: sum(t.calls for t in transports))
+        counters = _instrument(client)
+        return client, _info(FAKE_BOUNDARY_LABEL, counters)
 
     return factory
 
@@ -368,15 +411,17 @@ def execute(case: dict, arch: str, mode: str, factory=offline_factory) -> dict:
             return _failed_run(OFFLINE_LABEL if factory is offline_factory else REAL_LABEL, f"NO_KEY:{type(exc).__name__}")
         runner = single_agent.run_single_agent_with_trace if arch == "single" else staged_agent.run_staged_agent_with_trace
         http_before = info.http_calls()
+        errors_before = len(info.http_errors())
         start = time.perf_counter()
         try:
             result = runner(raw["request_id"], client=client)
         except MalformedRequestError as exc:
-            return _failed_run(info.label, type(exc).__name__, rejected=True, latency_ms=(time.perf_counter() - start) * 1000)
+            return _failed_run(info.label, type(exc).__name__, rejected=True, latency_ms=(time.perf_counter() - start) * 1000, http_errors=info.http_errors()[errors_before:])
         except Exception as exc:  # an unexpected failure is a finding, recorded as a rejected run with its own error name
-            return _failed_run(info.label, f"UNHANDLED:{type(exc).__name__}", rejected=True, latency_ms=(time.perf_counter() - start) * 1000)
+            return _failed_run(info.label, f"UNHANDLED:{type(exc).__name__}", rejected=True, latency_ms=(time.perf_counter() - start) * 1000, http_errors=info.http_errors()[errors_before:])
         latency_ms = (time.perf_counter() - start) * 1000
         http_after = info.http_calls()
+        http_errors = info.http_errors()[errors_before:]
 
     decision = result.decision
     telemetry = decision.telemetry
@@ -400,15 +445,17 @@ def execute(case: dict, arch: str, mode: str, factory=offline_factory) -> dict:
         "tool_calls": telemetry.tool_calls,
         "api_attempts": getattr(telemetry, "api_attempts", None),
         "http_calls": http_delta,
+        "http_errors": http_errors,
         "latency_ms": latency_ms,
         "gemini_unavailable_reason": result.gemini_unavailable_reason,
     }
 
 
-def _failed_run(label: str, error: str, *, rejected: bool = True, latency_ms: float = 0.0) -> dict:
+def _failed_run(label: str, error: str, *, rejected: bool = True, latency_ms: float = 0.0, http_errors: Optional[list] = None) -> dict:
     return {
         "rejected": rejected, "error": error, "transport": label, "model": None,
         "llm_calls": 0, "tool_calls": 0, "api_attempts": None, "http_calls": None,
+        "http_errors": list(http_errors or []),
         "latency_ms": latency_ms, "gemini_unavailable_reason": None,
     }
 
@@ -694,6 +741,7 @@ def evaluate(truth: dict, archs=ARCHS, modes=MODES, case_ids: Optional[set] = No
                         "logical_llm_calls": obs["llm_calls"],
                         "api_attempts": obs.get("api_attempts"),
                         "http_calls": obs.get("http_calls"),
+                        "http_error_codes": obs.get("http_errors", []),
                         "tool_calls": obs["tool_calls"],
                         "latency_ms": round(obs["latency_ms"], 3),
                         "evidence_count": obs.get("evidence_count"),
