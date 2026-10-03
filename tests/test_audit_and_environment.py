@@ -104,7 +104,7 @@ def test_default_location_is_git_ignored_runs_folder_and_can_be_overridden(monke
 def test_banner_is_disabled_with_no_key_and_says_why():
     enabled, message = live_analysis_status({})
     assert enabled is False
-    assert message == "Live analysis: Disabled — GEMINI_API_KEY not configured"
+    assert message == "Live analysis: Disabled — set GEMINI_API_KEY or CLOSEROUTER_API_KEY"
 
 
 def test_banner_is_enabled_with_a_key_and_reports_the_pool_when_used():

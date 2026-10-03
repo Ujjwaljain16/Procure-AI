@@ -6,7 +6,7 @@ Built for FDE Assessment 3 ([brief](docs/Assignment_3_Brief.pdf)). The synthetic
 
 ## What this demonstrates
 
-- **Evidence-backed recommendations.** Every claim cites an evidence ID that a tool actually retrieved. Citations to IDs that were never retrieved are dropped.
+- **Evidence-backed recommendations.** Generated evidence claims are grounded in retrieved evidence IDs, and citations to IDs that were never retrieved are dropped.
 - **Deterministic policy enforcement.** Eleven numbered policy rules run in code (POL-1 to POL-11, with sub-rules POL-4a to POL-4d). The model has no input to them.
 - **Human handoff for sensitive decisions.** `human_review_required` is always true. Approvals are always shown as pending.
 - **Architecture chosen by evidence, not intuition.** A single agent (A) and a two-agent staged variant (B) were run on the same test sets. A pre-registered decision rule selected A.
@@ -111,7 +111,7 @@ export CLOSEROUTER_API_KEY="your-key-here"
 
 The optional variables are `GEMINI_MODEL` (default `gemini-2.5-flash`), `GEMINI_API_KEY_POOL` (comma-separated keys, rotated when one is exhausted), `CLOSEROUTER_MODEL` (default `google/gemini-3.7-flash`), and `CLOSEROUTER_BASE_URL` (default `https://api.closerouter.dev/v1`). If `GEMINI_API_KEY` or `GEMINI_API_KEY_POOL` is set, the app uses Gemini. Otherwise, if `CLOSEROUTER_API_KEY` is set, it uses CloseRouter.
 
-The sidebar shows the state: `Live analysis: Enabled` or `Live analysis: Disabled — GEMINI_API_KEY not configured`.
+The sidebar shows whether live analysis is enabled and, when it is disabled, which provider configuration is missing: `Live analysis: Enabled (…)` or `Live analysis: Disabled — set GEMINI_API_KEY or CLOSEROUTER_API_KEY`.
 
 ![Sidebar showing live analysis enabled](docs/images/01_sidebar_live_status.png)
 
@@ -183,6 +183,14 @@ Both architectures share the preflight, the policy engine, the validator, and th
 | Live recommendation and next action | 16 of 16 | 16 of 16 |
 | Live evidence grounding | 16 of 16 | 16 of 16 |
 
+### Decision in one view
+
+- A and B produced the same measured recommendation and next-action results, and the same evidence-grounding results, in the final 16-case live sample.
+- A used fewer logical model calls and had a lower median latency.
+- B therefore did not meet the pre-registered improvement threshold that would justify its additional orchestration.
+
+**Ship: Architecture A.**
+
 ![Staged recommendation from Architecture B](docs/images/03_recommendation_staged.png)
 
 ## 5. Evaluation
@@ -207,7 +215,7 @@ Result: `evaluation/correctness/results/correctness_real_20261003T142144Z.json`,
 - Deterministic and safety dimensions: no regression in B against A.
 - Attempts counted at the HTTP boundary matched the transport: 32 of 32 checks, zero mismatches.
 
-**The call-count dimensions did not pass in the live run.** Dimension d12 (logical LLM calls) and d13 (tool-call attempts) check against the offline call-count contract. The live model made more calls than that contract allows, in every case, in both architectures: 3 or 4 logical calls and 8 tool calls per case. The model issued supplemental lookups. Those lookups are identity-bound and cannot change any policy field. The offline contract did not predict them. This is reported as a finding, not as a pass.
+The live model made additional supplemental lookups beyond the offline call-count contract. Across the 16-case live sample, these additional calls occurred in both architectures. They were identity-bound and could not modify authoritative policy fields. The offline contract therefore did not predict the observed live call pattern. This is reported as a finding rather than counted as a passing contract check. Dimensions d12 (logical LLM calls) and d13 (tool-call attempts) fail for that reason. The per-run counts are in the audit-trail captures below.
 
 Run details for one live analysis, single agent (three model calls, eight tool calls, 35.7 s), and the staged equivalent (five model calls, nine tool calls, 32.5 s):
 
@@ -221,7 +229,7 @@ Earlier live runs and failed attempts are indexed in [`evaluation/correctness/re
 
 **Ship Architecture A.** The decision is in [`docs/architecture_decision.md`](docs/architecture_decision.md) (under the 500-word limit).
 
-- The pre-registered rule required B to show at least two more successful cases, or ten percentage points more, on the primary or secondary metric, with no regression. B showed neither. The rule therefore selects A.
+- The pre-registered rule required B to beat A by at least two more successful cases, or ten percentage points, on the primary metric (recommendation and next action) or the secondary metric (evidence grounding). It also required zero regression against A on policy rules (d04), approvals (d05), missing information (d06), risk flags (d07), human review (d08), prompt-injection resilience (d09), and unqualified approval claims. B met the no-regression condition but did not meet the improvement threshold, so the rule selects A.
 - Both architectures matched the ground truth on every case, so B's extra orchestration produced no measured quality gain here. It cost about 6 seconds more per case (median) and one more model call.
 - A is the simpler system, and on this evidence it performs as well as B.
 
@@ -265,7 +273,7 @@ The brief's six edge cases, with the ground-truth cases that exercise each one (
 - **Some ground-truth expectations were written after outputs were visible.** One was revised after a disagreement, and the revision is logged.
 - **Catalog matching is exact after normalisation,** not semantic. A differently worded product name can be missed as an overlap.
 - **Synthetic data only.** No real vendor, identity, or procurement system is integrated.
-- **No persistence of decisions.** Each analysis appends one line to `runs/audit.jsonl` (git-ignored). Approvals are not recorded anywhere.
+- **No durable decision or approval store.** Each analysis appends one minimal audit record to `runs/audit.jsonl` (git-ignored), but approvals and procurement decisions are not persisted in a database or workflow system.
 - **No authentication.** The UI and the vendor-risk mock bind to loopback by default. Binding elsewhere needs the explicit `PROCUREAI_ALLOW_EXTERNAL=1` opt-in, and then an authenticating reverse proxy must be placed in front.
 - **Provider availability and quota.** Live runs depend on a provider's route and quota. Provider failures are recorded as provider failures, not architecture failures.
 - **An intermittent test failure is unresolved.** One full run failed `test_failure_contract::test_missing_api_key_recommendation_is_clean`. An environment dependence was fixed and the root cause was not established. Later full runs passed.

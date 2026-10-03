@@ -28,4 +28,4 @@ def live_analysis_status(env: Optional[Mapping[str, str]] = None) -> tuple[bool,
     if source.get("CLOSEROUTER_API_KEY"):
         model = source.get("CLOSEROUTER_MODEL") or "google/gemini-3.7-flash"
         return True, f"Live analysis: Enabled (OpenAI-compatible endpoint, model {model})"
-    return False, "Live analysis: Disabled — GEMINI_API_KEY not configured"
+    return False, "Live analysis: Disabled — set GEMINI_API_KEY or CLOSEROUTER_API_KEY"
