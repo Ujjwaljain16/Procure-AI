@@ -142,7 +142,7 @@ def main() -> None:
     check_contract_and_evals()
     check_mock_api()
     print("\nPRE-FLIGHT PASSED")
-    print("Next: copy .env.example to .env, add your model credentials, then run: python run_local.py")
+    print("Next: run python run_local.py. Live analysis is optional; see README Quick Start for the environment variables.")
 
 
 if __name__ == "__main__":

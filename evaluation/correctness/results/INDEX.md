@@ -7,7 +7,8 @@ This folder holds the correctness layer (layer 2, offline) and the real-model sa
 | File | What it is | Git revision | Live model? |
 |---|---|---|---|
 | `correctness_20261003T113526Z.json` | Offline reproduction: 26 cases, both architectures, four fault modes. Clean worktree. | `afb9cab` | No |
-| `correctness_real_20261003T122905Z.json` | **Final real-model sample.** Eight cases, both architectures, interleaved per case, one key pool. Six cells lost to provider quota (HTTP 429), recorded as quota failures, not architecture failures. | `69e483d`, clean worktree | Yes (`gemini-2.5-flash`) |
+| `correctness_real_20261003T142144Z.json` | **Final real-model sample (pre-registered).** Sixteen cases, both architectures, interleaved per case, `google/gemini-3.7-flash` through CloseRouter. See the section below. | `07c5dd2`, clean worktree | Yes (CloseRouter) |
+| `correctness_real_20261003T122905Z.json` | Earlier eight-case run on direct Gemini (`gemini-2.5-flash`), kept as history, not the final result. Six cells lost to provider quota (HTTP 429), recorded as quota failures, not architecture failures. | `69e483d`, clean worktree | Yes (`gemini-2.5-flash`) |
 
 ## Archive
 
