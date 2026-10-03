@@ -31,3 +31,4 @@ This folder holds the correctness layer (layer 2, offline) and the real-model sa
   with Amendment 1 for the model): A and B both 16/16 on recommendation and next action; both 16/16 on evidence grounding;
   no regression. Rule outcome: ship A. Median latency A 18.2 s, B 24.4 s; median logical calls A 3, B 4.
   n=16, one run: descriptive, no significance claim.
+- Known textual defect in this file: its `ab_note` field reads "eight cases". That text was hard-coded in the evaluator when the file was written. The file has not been regenerated (the evaluator refuses to overwrite results). The rows, summary, integrity checks, and the 16-case results are unchanged. The evaluator now builds the note from the sample length, so future runs state the correct count.

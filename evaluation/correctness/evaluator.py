@@ -940,7 +940,7 @@ def run_real(truth: dict, archs=ARCHS, modes=("normal",), case_ids: Optional[set
     if production:
         payload["sample"] = [{"case_id": c, "why_included": r} for c, r in REAL_SAMPLE]
         payload["ab_comparison"] = ab_comparison(run["rows"])
-        payload["ab_note"] = "descriptive only; eight cases support no significance claim"
+        payload["ab_note"] = f"descriptive only; {len(REAL_SAMPLE)} cases support no significance claim"
     return payload
 
 

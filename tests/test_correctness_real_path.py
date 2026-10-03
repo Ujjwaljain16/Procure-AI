@@ -380,6 +380,7 @@ def test_production_default_is_the_sample_on_both_architectures_with_a_descripti
         for arch in ("single", "staged"):
             assert {"logical_llm_calls", "api_attempts", "tool_calls", "latency_ms", "failing_dimensions"} <= set(entry[arch])
     assert "significance" in payload["ab_note"]
+    assert payload["ab_note"] == f"descriptive only; {len(ev.REAL_SAMPLE)} cases support no significance claim"
 
 
 def test_cli_real_rejects_a_single_architecture():
