@@ -76,9 +76,13 @@ def get_request_validated(request_id: str) -> dict:
     cost = request.get("annual_cost_usd")
     if cost is not None:
         try:
-            Decimal(str(cost))
+            amount = Decimal(str(cost))
         except (InvalidOperation, ValueError):
             raise MalformedRequestError(f"Request {request_id} has a non-numeric annual_cost_usd: {cost!r}") from None
+        # NaN and +/-Infinity are corrupt data, not a typo: hard stop. A NEGATIVE cost is a data-entry
+        # error and is handled as missing information by the policy engine (section 1), not rejected here.
+        if not amount.is_finite():
+            raise MalformedRequestError(f"Request {request_id} has a non-finite annual_cost_usd: {cost!r}")
 
     user_count = request.get("user_count")
     if user_count is not None and not isinstance(user_count, (int, float)):

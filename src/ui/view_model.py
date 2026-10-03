@@ -510,7 +510,10 @@ def build_procurement_view(result) -> ProcurementView:
         ),
         failure_category=failure_category,
         request_details=_build_request_details(
-            result.raw_request, employee.name if employee else None, registry.employee_department(), tuple(decision.missing_information)
+            result.raw_request,
+            employee.name if employee else None,
+            registry.employee_department(),
+            tuple(m.replace(" (invalid value)", "") for m in decision.missing_information),
         ),
         evidence=_build_evidence(registry.evidence_index()),
         policy_checks=policy_checks,

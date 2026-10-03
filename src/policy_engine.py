@@ -77,9 +77,12 @@ def to_decimal(value: Union[None, int, float, str, Decimal]) -> Optional[Decimal
     if isinstance(value, Decimal):
         return value
     try:
-        return Decimal(str(value))
+        amount = Decimal(str(value))
     except InvalidOperation as exc:  # pragma: no cover - defensive
         raise ValueError(f"Cannot interpret {value!r} as a monetary amount") from exc
+    if not amount.is_finite():
+        raise ValueError(f"Cannot interpret {value!r} as a monetary amount (not finite)")
+    return amount
 
 
 def _is_blank(value: Optional[str]) -> bool:
@@ -123,6 +126,9 @@ class RequestFields:
     business_justification: Optional[str] = None
     data_access_level: Optional[str] = None
     requested_integrations: Optional[tuple[str, ...]] = None
+    # True when the submitted cost was negative: it is then treated as MISSING (never priced) and
+    # reported as "annual cost (invalid value)" so the requester is asked to correct it.
+    annual_cost_invalid: bool = False
 
     @staticmethod
     def from_raw(raw: dict, *, department: Optional[str] = None) -> "RequestFields":
@@ -132,13 +138,16 @@ class RequestFields:
         as missing by POL-1 rather than guessed at.
         """
         integrations = raw.get("requested_integrations")
+        cost = to_decimal(raw.get("annual_cost_usd"))
+        cost_invalid = cost is not None and cost < 0
         return RequestFields(
             request_id=raw["request_id"],
             requester_id=raw.get("requester_id"),
             department=department,
             product_name=raw.get("product_name"),
             vendor_name=raw.get("vendor_name"),
-            annual_cost_usd=to_decimal(raw.get("annual_cost_usd")),
+            annual_cost_usd=None if cost_invalid else cost,
+            annual_cost_invalid=cost_invalid,
             user_count=raw.get("user_count"),
             business_justification=raw.get("business_justification"),
             data_access_level=raw.get("data_access_level"),
@@ -330,7 +339,7 @@ def _check_required_fields(request: RequestFields) -> _RuleOutcome:
     if _is_blank(request.product_name) or _is_blank(request.vendor_name):
         missing.append("product/vendor")
     if request.annual_cost_usd is None:
-        missing.append("annual cost")
+        missing.append("annual cost (invalid value)" if request.annual_cost_invalid else "annual cost")
     if request.user_count is None:
         missing.append("number of users/licenses")
     if _is_blank(request.business_justification):
