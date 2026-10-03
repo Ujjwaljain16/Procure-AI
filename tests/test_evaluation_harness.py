@@ -153,3 +153,15 @@ class TestRunCaseForEveryFrozenCase:
         assert check_expected(actual, {"required_approvals_include": ["Manager"]}) == []
         assert check_expected(actual, {"required_approvals_include": ["CFO"]}) != []
         assert check_deterministic_fields_match(actual, actual) == []
+
+
+class TestReplayToolPlan:
+    def test_replay_plan_includes_purchase_history_when_a_product_is_named(self):
+        raw = {"requester_id": "E004", "vendor_name": "SignFlow", "product_name": "SignFlow Add-on"}
+        turn = ReplayGeminiClient(raw).generate_turn([], [], "")
+        names = [c.name for c in turn.function_calls]
+        assert "search_purchase_history" in names
+
+    def test_replay_plan_has_no_purchase_history_call_without_a_product_or_vendor(self):
+        turn = ReplayGeminiClient({"requester_id": "E004"}).generate_turn([], [], "")
+        assert "search_purchase_history" not in [c.name for c in turn.function_calls]

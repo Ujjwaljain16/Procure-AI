@@ -45,6 +45,13 @@ class ReplayGeminiClient:
                 calls.append(ToolCall(call_id="replay-2", name="search_catalog", arguments=args))
             if vendor_name:
                 calls.append(ToolCall(call_id="replay-3", name="get_vendor_evidence", arguments={"vendor_name": vendor_name}))
+            if vendor_name or product_name:
+                history_args = {}
+                if product_name:
+                    history_args["product_name"] = product_name
+                if vendor_name:
+                    history_args["vendor_name"] = vendor_name
+                calls.append(ToolCall(call_id="replay-4", name="search_purchase_history", arguments=history_args))
             return ModelTurn(function_calls=tuple(calls), text=None, raw_content=object())
         self._turn_index += 1
         return ModelTurn(function_calls=(), text="", raw_content=object())
