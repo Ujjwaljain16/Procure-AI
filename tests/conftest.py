@@ -15,7 +15,6 @@ from data/vendor_risk.json, without HTTP.
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
@@ -23,11 +22,11 @@ import pytest
 import requests
 from dotenv import load_dotenv
 
+from evaluation.vendor_source import load_records, records_lookup
 from src.tools import vendor_risk as vendor_risk_tool
 
 _GEMINI_VARS = ("GEMINI_API_KEY", "GEMINI_API_KEY_POOL")
 _ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
-_VENDOR_RECORDS = Path(__file__).resolve().parents[1] / "data" / "vendor_risk.json"
 
 if os.environ.get("RUN_REAL_GEMINI_TESTS") == "1":
     load_dotenv(_ENV_FILE, override=False)
@@ -43,12 +42,6 @@ else:
         os.environ.setdefault(key, value)
 
 
-def _http_status_error(status_code: int) -> requests.HTTPError:
-    response = requests.Response()
-    response.status_code = status_code
-    return requests.HTTPError(response=response)
-
-
 @pytest.fixture(autouse=True)
 def _vendor_service_unreachable_by_default(monkeypatch):
     """Every vendor-risk lookup fails as an unreachable service unless a test says otherwise."""
@@ -61,13 +54,7 @@ def _vendor_service_unreachable_by_default(monkeypatch):
 
 @pytest.fixture
 def live_vendor_records(monkeypatch):
-    """Answer vendor-risk lookups with the records mock_api serves, read from the same data file, without HTTP."""
-    records = json.loads(_VENDOR_RECORDS.read_text(encoding="utf-8"))
-
-    def lookup(name, timeout_seconds=3.0):
-        if name not in records:
-            raise _http_status_error(404)
-        return {"vendor_name": name, **records[name]}
-
-    monkeypatch.setattr(vendor_risk_tool.vendor_client, "get_vendor_risk", lookup)
+    """Answer vendor-risk lookups exactly as mock_api serves them (same records, same 404/503), without HTTP."""
+    records = load_records()
+    monkeypatch.setattr(vendor_risk_tool.vendor_client, "get_vendor_risk", records_lookup(records))
     return records

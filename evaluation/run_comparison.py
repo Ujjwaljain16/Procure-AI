@@ -56,6 +56,7 @@ from src.policy_engine import (
 )
 from evaluation.replay_client import ReplayGeminiClient
 from evaluation.run_invariants import check_run
+from evaluation.vendor_source import SOURCE_LABEL, serve_vendor_records_from_data
 from evaluation.safety_gate import evaluate_comparison_safety, evaluate_result_safety
 
 CASES_PATH = ROOT / "evaluation" / "cases.json"
@@ -79,6 +80,7 @@ def _generation_config(use_real: bool) -> dict:
         "temperature": GENERATION_TEMPERATURE,
         "sdk_version": _sdk_version() if use_real else None,
         "seed": "not supported by this endpoint",
+        "vendor_source": SOURCE_LABEL,
     }
 
 
@@ -407,7 +409,8 @@ def main() -> None:
     all_results = {}
     for architecture in architectures:
         print(f"\nRunning {len(cases)} cases for architecture={architecture} (mode={'real' if args.real else 'replay'})...")
-        per_case = run_architecture(cases, architecture, args.real, pooled_keys)
+        with serve_vendor_records_from_data():  # the preflight's vendor lookups must not depend on a running server
+            per_case = run_architecture(cases, architecture, args.real, pooled_keys)
         aggregate = _aggregate(per_case)
         output = {
             "timestamp": timestamp,
