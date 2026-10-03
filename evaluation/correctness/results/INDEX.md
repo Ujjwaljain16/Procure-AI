@@ -21,3 +21,11 @@ This folder holds the correctness layer (layer 2, offline) and the real-model sa
   CloseRouter 16-case attempt at git revision `aa2fafe`. Only 3 of 32 cells completed. The rest failed with HTTP 503 (no available
   upstream for `google/gemini-3-flash`, circuit open at the provider), HTTP 429, and read timeouts. These are provider-availability
   failures, not architecture or model results. Do not cite them.
+
+## Final pre-registered live run (CloseRouter, google/gemini-3.7-flash)
+
+- `correctness_real_20261003T142144Z.json`: 16 cases, both architectures, interleaved per case. Git revision `07c5dd2`,
+  clean worktree. All 16 cases comparable, no provider failures. Pre-registered rule (docs/preregistration_b_rule.md,
+  with Amendment 1 for the model): A and B both 16/16 on recommendation and next action; both 16/16 on evidence grounding;
+  no regression. Rule outcome: ship A. Median latency A 18.2 s, B 24.4 s; median logical calls A 3, B 4.
+  n=16, one run: descriptive, no significance claim.
