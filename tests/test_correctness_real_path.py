@@ -347,8 +347,8 @@ def test_selfcheck_masked_outage_is_caught_as_a_fault_that_was_not_observed():
 # --- the live sample -------------------------------------------------------------------------------
 
 
-def test_live_sample_is_eight_justified_cases_that_exist_in_the_ground_truth():
-    assert len(ev.REAL_SAMPLE) == 8
+def test_live_sample_is_sixteen_justified_cases_that_exist_in_the_ground_truth():
+    assert len(ev.REAL_SAMPLE) == 16
     known = {c["case_id"] for c in TRUTH["cases"]}
     for case_id, reason in ev.REAL_SAMPLE:
         assert case_id in known, case_id
@@ -357,7 +357,7 @@ def test_live_sample_is_eight_justified_cases_that_exist_in_the_ground_truth():
 
 def test_production_run_refuses_a_case_outside_the_sample():
     with pytest.raises(ValueError, match="limited to the sample"):
-        ev.run_real(TRUTH, archs=ev.ARCHS, modes=("normal",), case_ids={"S-1002"})
+        ev.run_real(TRUTH, archs=ev.ARCHS, modes=("normal",), case_ids={"S-COST-ZERO"})
 
 
 def test_production_run_refuses_fewer_than_both_architectures_or_fault_modes():
@@ -369,7 +369,7 @@ def test_production_run_refuses_fewer_than_both_architectures_or_fault_modes():
 
 def test_production_default_is_the_sample_on_both_architectures_with_a_descriptive_ab_view(monkeypatch):
     # Stand the production client on the fake SDK boundary: the sample logic is exercised, nothing is sent.
-    monkeypatch.setattr(ev, "_production_client", lambda arch: ev._fake_boundary_client(arch, [FakeGenaiTransport("normal", {})]))
+    monkeypatch.setattr(ev, "_production_client", lambda arch, provider="gemini": ev._fake_boundary_client(arch, [FakeGenaiTransport("normal", {})]))
     payload = ev.run_real(TRUTH, archs=ev.ARCHS, modes=("normal",))
     assert {r["case_id"] for r in payload["rows"]} == set(ev.REAL_SAMPLE_IDS)
     assert len(payload["rows"]) == len(ev.REAL_SAMPLE) * len(ev.ARCHS)
