@@ -59,6 +59,27 @@ python run_local.py
 
 This starts the mock vendor-risk API (`http://127.0.0.1:8001`) and the Streamlit UI (`http://127.0.0.1:8501`). Prerequisites: **Python 3.11+**. No `GEMINI_API_KEY` is required to explore the UI or run the automated test suite — without one, the product degrades safely to an explicit "automated analysis unavailable, manual review required" state rather than crashing or fabricating a result. Never commit `.env`.
 
+## Read me first
+
+- **Reference date:** every policy result is computed against the fixed snapshot date 2026-09-30 (`data/procurement_policy.md`), never the system clock. Results do not change with the day you run them.
+- **Stopping the app (Windows):** Ctrl+C in the `run_local.py` terminal stops both the vendor mock and the UI. A forced kill is only needed if a process was left behind.
+- **Vendor mock:** it has no authentication and must stay on `127.0.0.1`. Do not bind it to a public interface.
+- **"Staged"** means the two-agent Architecture B (analyst then reviewer). It is selectable in the UI and produces the same kind of decision; A is the shipped default for the reasons in `docs/architecture_decision.md`.
+- **No key needed** to run the UI or the tests. Without a key the app shows an explicit manual-review state.
+- **Recommendation quality is not measured** by this evaluation. See the decision memo for what was and was not measured.
+
+## Gemini keys and quota
+
+The free tier caps each key at a small number of requests per day. Several keys can be pooled: set `GEMINI_API_KEY_POOL` in your local `.env` to a comma-separated list. The app and the evaluator then move to the next key when one is exhausted or overloaded. Keys are never logged; only their index appears in logs. Do not commit `.env`.
+
+## Checks before sharing or submitting
+
+```bash
+python scripts/preflight_secrets.py    # fails if a key-shaped string is in any non-ignored file
+python -m pytest tests/ -q             # full suite, no key needed
+python evaluation/run_comparison.py    # replay comparison; no quota spent
+```
+
 ## What AI Does
 
 Interprets the request, selects which tools to call (employee/budget, catalog, vendor risk, purchase history), synthesizes the retrieved evidence into a recommendation, rationale, and next step, and may flag suspected prompt injection. It never sets required approvals, risk flags, missing-information items, or whether human review is required — those fields don't exist on the model's output schema.
@@ -132,7 +153,7 @@ python evaluation/run_comparison.py --real --case-ids TC-01      # real API, one
 | Safety violations | 0 (either architecture) | 0 (either architecture) |
 | Median LLM calls | A: 3, B: 4 | A: 3.5, B: 4.0 |
 | Median tool calls | A: 3, B: 3 | — |
-| Median latency | negligible (no network cost in replay) | A: 12.4s, B: 20.8s (**+68%**) |
+| Median latency | not meaningful (no network cost in replay) | A: 12.4s (95% CI 10.1–14.6), B: 20.8s (CI 13.2–27.0); B slower in 5 of 6 cases, exact sign test p≈0.22 (not significant at n=6) |
 
 Full detail: `docs/final_evaluation.md` and `docs/architecture_comparison.md`.
 
@@ -179,7 +200,7 @@ Interpretive choices made where the brief and starter data didn't fully specify 
 ## Reproducibility
 
 ```bash
-python -m pytest tests/ -v          # 253 tests, no Gemini key required
+python -m pytest tests/ -v          # full suite, no Gemini key required (run `pytest --collect-only -q` for the count)
 python verify_setup.py               # no-LLM preflight check
 python evaluation/run_comparison.py  # replay-mode A/B comparison
 ```

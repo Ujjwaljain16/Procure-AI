@@ -60,8 +60,8 @@ This must **not** be characterized as B reasoning incorrectly about the SignalWa
 ## Interpretation
 
 **MEASURED** (exact numbers from stored artifacts):
-- Replay: 0/25 deterministic mismatches, 0 safety violations either architecture; B uses a median +1 LLM call.
-- Real sample: B's median latency is 20,792ms vs. A's 12,393ms (+68%); B's median LLM calls are 4.0 vs. A's 3.5; 5/6 cases had identical policy fields between architectures; 0 safety violations in either architecture across both evidence classes.
+- Replay: 0/25 deterministic mismatches; per-run invariants hold for both architectures in the current replay artifacts; B uses a median +1 LLM call.
+- Real sample: B's median latency is 20,792ms (95% CI 13.2–27.0s) vs. A's 12,393ms (CI 10.1–14.6s); B was slower in 5 of 6 cases (exact sign test p≈0.22), which is not statistically established at this sample size. B's median LLM calls are 4.0 vs. A's 3.5; 5/6 cases had identical policy fields between architectures. No safety violation was recorded in either architecture; the real-sample artifacts predate the per-run invariant records, so this is an observation, not a stored gate result.
 
 **OBSERVED** (one-off qualitative findings, not measured patterns):
 - Both real models independently flagged the REQ-1006 injection attempt without being instructed to by any hardcoded rule.

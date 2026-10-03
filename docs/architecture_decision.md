@@ -2,24 +2,30 @@
 
 ## Decision
 
-**Ship Architecture A (single-agent baseline).** The evaluation demonstrated equivalent deterministic/policy safety and correctness between the two architectures, while Architecture B introduced additional model latency and call overhead without a demonstrated compensating quality improvement.
+**Ship Architecture A (single agent).** It matched Architecture B on every deterministic and safety check we can measure, uses fewer model calls, and is simpler to operate and test. We did not measure a quality difference between the two, so this decision does not claim one.
 
-## Context
+## Evidence
 
-Architecture A uses one reasoning agent: it gathers evidence via four allowlisted tools, then produces a recommendation validated against a deterministic policy engine. Architecture B splits reasoning into an analyst stage (gathers the same evidence, writes a structured report) and a reviewer stage (consumes that report plus the policy result, produces the final recommendation). Both share identical tools, policy engine, validator, and output contract — only orchestration differs. B was built to test whether a second reasoning stage measurably improves the product.
+**Frozen replay set (25 cases, deterministic stand-in model).** Both architectures pass all expected checks (25/25), agree on every deterministic field (0 mismatches), and pass every recorded per-run invariant. Caveat: both use the same policy engine and the same stand-in model, so agreement on policy fields is expected by construction. This shows the wiring is correct, not that either architecture reasons well.
 
-## Evaluation
+**Real-model sample (6 cases, one run each, gemini-2.5-flash, temperature 0).**
+- B was slower in 5 of 6 cases (exact two-sided sign test, p ≈ 0.22). That is not statistically established at this sample size.
+- Median latency: A 12.4 s (95% bootstrap CI 10.1–14.6); B 20.8 s (CI 13.2–27.0). The intervals overlap heavily. The earlier "+68%" headline is not supported.
+- Each architecture had one transient 503 during a model call. Both degraded to a human-review decision with the reason recorded. B's failure was not evidence of weaker reasoning.
 
-Two evidence classes. A **frozen 25-case replay comparison** (deterministic stand-in model) found 25/25 expected-check passes for both architectures, 0/25 deterministic-field mismatches, 0 safety violations; B used a median 4 LLM calls to A's 3, tool calls identical (3 median, both). A **six-case real-Gemini sample** (`gemini-2.5-flash`, same cases, both architectures — representative, not statistically significant) found: median latency 12.4s (A) vs. 20.8s (B, +68%); median LLM calls 3.5 (A) vs. 4.0 (B); 5/6 cases with identical policy fields; 0 safety violations either architecture. The one differing case (SignalWatch conflict) was caused by a transient Gemini 503 interrupting B's analyst mid-retrieval — the policy engine responded safely, never fabricating a result. The divergence reflects B's larger failure surface, not incorrect reasoning.
+**Quality.** Not measured. B's analyst raised one useful clarification (whether a NeuralDesk request was a new product or a variant of an existing one). We observed it once and do not treat it as a measured advantage.
 
 ## Trade-off
 
-B adds a second reasoning stage, roughly one more real LLM call, and materially higher latency, plus more opportunities for a transient failure to interrupt a request (demonstrated by TC-10). It showed safe behavior under that failure, correct independent handling of a real prompt-injection attempt (matching A), and one genuine qualitative clarification (whether a requested product was new or a variant of an existing catalog entry) that A did not raise in that sample. It did **not** show a repeatable, measurable improvement in correctness, policy compliance, or escalation accuracy over A, on either evidence class.
+B adds a reasoning stage, roughly one more model call per request, and a second failure point. Nothing we measured offsets that cost. The assignment asks for a simpler system when it performs as well, and on measured behavior A does.
 
-## Decision Rationale
+## What would change this decision
 
-Policy correctness and safety were equivalent across both evidence classes. The only consistent, measured differences were operational: more LLM calls, higher latency, and greater exposure to transient failures for B, against one anecdotal quality observation. Per the assignment's own framing — a simpler system that performs as well or better is a stronger answer than unnecessary orchestration — the evidence supports shipping the architecture that achieves the same verified outcome at lower cost and complexity.
+Ship B only if a blinded, two-rater study on a sealed holdout of at least 30 cases shows B improving recommendation or missing-information quality, with a 95% interval above zero and reported inter-rater agreement. A failure-mode analysis showing a class of cases that A systematically misses would also justify revisiting.
 
 ## Limitations
 
-The real-model sample (n=6) is too small to rule out a quality difference either direction; it establishes cost and safety, not a definitive quality verdict. Replay results are exact but cannot assess recommendation quality, since its text is templated. Free-tier quota limited how much real-model evidence could be gathered.
+- The real sample has six cases and one run each. It supports the safety and cost observations, not a quality verdict.
+- Replay results cannot judge recommendation text, since the stand-in writes fixed text.
+- The policy engine determines most deterministic outcomes, so agreement between architectures is largely structural.
+- One model family and one prompt version were tested.

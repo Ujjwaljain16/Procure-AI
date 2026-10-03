@@ -112,7 +112,7 @@ Artifacts: `evaluation/results/single_20260930T091330Z.json`, `evaluation/result
 
 | Metric | A (single) | B (staged) | Difference |
 |---|---:|---:|---:|
-| Median latency | **12,393ms (12.4s)** | **20,792ms (20.8s)** | **+68% for B** |
+| Median latency | 12,393ms (95% CI 10.1–14.6s) | 20,792ms (95% CI 13.2–27.0s) | B slower in 5 of 6 cases; exact sign test p≈0.22, not statistically established at n=6 |
 | Mean latency | 12,350ms | 20,345ms | +65% for B |
 | Median LLM calls | 3.5 | 4.0 | +0.5 |
 | Mean LLM calls | 3.5 | 5.0 | +43% (pulled up by two 7-call staged cases) |
@@ -146,7 +146,7 @@ On TC-12, the staged analyst's report surfaced a genuinely useful question singl
 
 Two distinct pictures, from two distinct evaluation modes, both real findings:
 
-1. **Mechanically (25-case replay sample):** Architecture B preserves every policy guarantee A provides — 0/25 deterministic-field mismatches, 0 safety violations, both pass the injection-pair check identically. The measured overhead there was small (+1 LLM call, negligible latency, because replay has no network cost).
+1. **Mechanically (25-case replay sample):** Architecture B preserves every policy guarantee A provides — 0/25 deterministic-field mismatches, no per-run invariant failures, both pass the injection-pair check identically. The measured overhead there was small (+1 LLM call, negligible latency, because replay has no network cost).
 2. **With genuine model reasoning (6-case real sample):** B still preserves policy fidelity in 5/6 cases, with the 6th explained by a transient real-world API outage rather than a design flaw — but the **real cost is much larger than replay suggested**: ~65-70% higher latency and up to +3 LLM calls on some cases, for one clear instance of added analytical value (the NeuralDesk product-identity question) against no clear instance of catching an error A actually made.
 
 Neither sample shows B producing a *worse* or *unsafe* result than A at any point. Neither sample shows B reliably producing a *better* result either — the one qualitative win observed is real but anecdotal at n=6.

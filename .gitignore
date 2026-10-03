@@ -7,8 +7,4 @@ __pycache__/
 evals/results_*.csv
 
 # internal working notes, not part of the submission
-plan.md
-procurebench_plan.md
-ui_upgrade_plan.md
-reliability_upgrade_plan.md
-evaluator_polish_plan.md
+internal_notes/
