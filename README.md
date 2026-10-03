@@ -13,11 +13,9 @@ CURRENT SUBMISSION
   ├── Architecture comparison .... "Results" and "Architecture Decision" below
   └── Final ship decision ........ docs/architecture_decision.md
 
-HISTORICAL / DEVELOPMENT
-  ├── Results index .............. evaluation/results/INDEX.md (replay) and evaluation/correctness/results/INDEX.md (correctness, live)
-  ├── Archived results ........... evaluation/results/archive/ and evaluation/correctness/results/archive/
-  ├── Pre-hardening documents .... docs/architecture_comparison.md, docs/architecture_a_baseline.md
-  └── Development notes .......... docs/starter_pack_audit.md
+ARCHIVE
+  ├── Results index .............. evaluation/results/INDEX.md (replay) and evaluation/correctness/results/INDEX.md (live)
+  └── Archived runs .............. evaluation/results/archive/ and evaluation/correctness/results/archive/
 ```
 
 ## Problem
@@ -241,7 +239,7 @@ Each correctness result records the git revision, whether the worktree was clean
 | Agent & tool design | 20% | `docs/architecture.md`, `src/evidence.py`, `src/agent/`, `src/tools/` |
 | Reliability & human controls | 15% | Reliability section, Edge Case Coverage, `src/agent/validation.py`, `human_review_required` always true |
 | Evaluation & comparison | 20% | `docs/final_evaluation.md`, `docs/architecture_decision.md`, `evaluation/` (replay, correctness, live sample) |
-| Engineering & communication | 10% | This README, `docs/`, the automated test suite, `docs/starter_pack_audit.md` |
+| Engineering & communication | 10% | This README, `docs/`, the automated test suite, the CI workflow |
 
 ## Project Structure
 

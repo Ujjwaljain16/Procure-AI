@@ -267,7 +267,7 @@ class TestModelOrApiException:
         assert client.structured_calls == 0
 
     def test_llm_calls_telemetry_counts_a_failed_attempt(self):
-        # Phase 4/5 audit finding: a failed call is still a real API attempt
+        # Regression: a failed call is still a real API attempt
         # and must be counted, not dropped to 0.
         client = ScriptedGeminiClient(turns=[], structured_result=_synthesis(), raise_on_turn_index=0)
         decision = run_single_agent("REQ-1001", client=client)

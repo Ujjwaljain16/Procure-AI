@@ -1,6 +1,6 @@
 """Integration test: tool outputs -> PolicyContext -> evaluate_policy(),
 entirely without an LLM. Proves the tool layer built in this phase produces
-inputs the Phase 2 policy engine can actually consume end-to-end, using real
+inputs the policy engine can actually consume end-to-end, using real
 requests from data/requests.json.
 
 The vendor-risk API call is monkeypatched at the same boundary as

@@ -720,7 +720,7 @@ class TestHumanControls:
         assert all(check.status in (CheckStatus.OK, CheckStatus.FLAGGED, CheckStatus.SKIPPED) for check in result.checks)
 
     def test_human_review_required_matches_every_public_case_expectation(self):
-        """Phase 5 audit: confirms the "always True" interpretation against
+        """Regression: confirms the "always True" interpretation against
         the one piece of ground truth available -- the public evaluation
         harness. All six public cases, including the lowest-risk one
         (PUB-01), expect human_review_required: true; none expects false.

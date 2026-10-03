@@ -48,7 +48,7 @@ def md_escape(text) -> str:
 MISSING_LABEL = "Missing"
 NOT_PROVIDED_LABEL = "Not provided"
 
-# A small, reusable uncertainty-state taxonomy (Tier 1 item 5) -- used
+# A small, reusable uncertainty-state taxonomy -- used
 # wherever a piece of evidence needs a status badge more specific than a
 # plain "Missing"/"Not provided" label, so VERIFIED/UNAVAILABLE/CONFLICTING
 # read as distinct states instead of all collapsing into a vague "Unknown".
@@ -155,7 +155,7 @@ class AuditStageView:
 
 @dataclass(frozen=True)
 class VendorSecurityView:
-    """First-class vendor-freshness panel (Tier 1 item 4) -- a structured
+    """First-class vendor-freshness panel -- a structured
     comparison of the internal registry vs. the live vendor-risk service,
     built from the same typed evidence objects evaluate_policy() itself
     reads (src.policy_engine.VendorRegistryEvidence / VendorRiskEvidence),
@@ -342,7 +342,7 @@ _CHECK_KIND_TO_STAGE_STATUS = {"ok": "done", "flagged": "flagged", "skipped": "s
 def _build_audit_timeline(
     tool_calls: tuple[ToolCallView, ...], policy_checks: tuple[PolicyCheckView, ...], gemini_unavailable_reason: Optional[str]
 ) -> tuple[AuditStageView, ...]:
-    """Tier 1 item 3 ("Decision Trace"): one stage per retrieval step plus
+    """A decision trace ("Decision Trace"): one stage per retrieval step plus
     one stage per individual POL-rule check (not a single flattened "Policy
     evaluated" stage), so the trace reads like a numbered audit log instead
     of a summary. Every POL-rule stage is read directly off
@@ -393,7 +393,7 @@ _ASSESSMENT_STATE_ACTION_TEXT = {
 def _build_vendor_security(
     registry_evidence: Optional[VendorRegistryEvidence], vendor_risk_evidence: Optional[VendorRiskEvidence]
 ) -> Optional[VendorSecurityView]:
-    """Tier 1 item 4: re-groups the two vendor evidence rows the system
+    """re-groups the two vendor evidence rows the system
     already retrieved into one structured comparison card, reusing
     evaluate_vendor_security_assessment() -- the exact function
     evaluate_policy() itself calls -- so the CONFLICTING/UNAVAILABLE/VERIFIED
@@ -428,7 +428,7 @@ def _build_vendor_security(
 
 
 def _build_constraints_summary(policy_checks: tuple[PolicyCheckView, ...]) -> tuple[ConstraintView, ...]:
-    """Tier 1 item 2(a): a compact ✓/⚠ checklist meant to sit right next to
+    """a compact ✓/⚠ checklist meant to sit right next to
     the recommendation, re-labeling the same policy_checks data the full
     Policy checks panel already shows -- not a second source of truth."""
     return tuple(ConstraintView(icon="✓" if c.status_kind == "ok" else "⚠", text=c.detail) for c in policy_checks if c.status_kind != "skipped")
@@ -448,7 +448,7 @@ _LIFECYCLE_EVIDENCE_UNAVAILABLE = ("Received", "Evidence unavailable", "Human ve
 
 
 def _build_lifecycle(decision, gemini_unavailable_reason: Optional[str]) -> LifecycleView:
-    """Tier 1 item 1: which named stage sequence applies, and where the
+    """which named stage sequence applies, and where the
     request currently sits in it, read from the exact same fields
     _list_status_badge() already reads -- a richer rendering of an existing
     classification, not a new one. Every run reaching this function has

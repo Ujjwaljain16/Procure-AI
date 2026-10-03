@@ -1,9 +1,8 @@
 """Structured-output schema for Architecture B's analyst stage.
 
 Kept in its own module rather than added to ``src/agent/schemas.py`` because
-that file is part of Architecture A's frozen baseline for the Phase 6
-A-vs-B experiment (see ``docs/architecture_a_baseline.md``) -- Architecture B
-must not modify it.
+that file is part of Architecture A's frozen baseline for the
+A-vs-B experiment: Architecture B must not modify it.
 
 ``AnalystReport`` is an *intermediate* artifact, not the final answer: the
 reviewer stage consumes it alongside the evidence pack and the deterministic

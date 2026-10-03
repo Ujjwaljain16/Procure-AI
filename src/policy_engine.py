@@ -724,7 +724,7 @@ def evaluate_policy(context: PolicyContext) -> PolicyEvaluation:
         missing_information=missing_information,
         risk_flags=tuple(risk_flags),
         # human_review_required is fixed True for every evaluation -- audited
-        # explicitly (not merely carried over) in Phase 5. This is a policy
+        # explicitly (not merely carried over) in an earlier review. This is a policy
         # interpretation, not a coincidence of the rules above:
         #   1. POL-11 says the copilot is "recommendations only" and "a human
         #      remains responsible for final approval and exceptions" with no
