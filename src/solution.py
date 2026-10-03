@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+import time
+
 from src.contracts import Architecture, ProcurementDecision, RunTelemetry
 
 
-def _timeout_decision(request_id: str, architecture: Architecture) -> ProcurementDecision:
+def _timeout_decision(request_id: str, architecture: Architecture, elapsed_ms: float) -> ProcurementDecision:
+    """Conservative result for a run that hit the deadline. Counts are unknown
+    (None), not zero, and no approval list is implied: the deterministic
+    policy result was never produced for this run."""
     from src.agent.timeout_guard import MAX_ANALYSIS_SECONDS
 
     return ProcurementDecision(
         request_id=request_id,
-        recommendation=f"Analysis timed out after {MAX_ANALYSIS_SECONDS:.0f}s; manual review required.",
-        next_step="A human reviewer should evaluate this request manually; the automated analysis did not complete in time.",
+        recommendation=(
+            f"Analysis did not complete within {MAX_ANALYSIS_SECONDS:.0f}s; no policy result is available. Manual review required."
+        ),
+        next_step="A human reviewer should evaluate this request manually; no required approvals were determined automatically.",
         risk_flags=["analysis_timeout"],
         human_review_required=True,
-        telemetry=RunTelemetry(architecture=architecture, latency_ms=MAX_ANALYSIS_SECONDS * 1000),
+        telemetry=RunTelemetry(architecture=architecture, llm_calls=None, tool_calls=None, latency_ms=elapsed_ms),
     )
 
 
@@ -45,7 +52,8 @@ def handle_request(request_id: str, architecture: Architecture = "single") -> Pr
     else:
         raise ValueError(f"Unknown architecture: {architecture!r}")
 
+    started = time.monotonic()
     try:
         return run_with_timeout(runner)
     except TimeoutError:
-        return _timeout_decision(request_id, architecture)
+        return _timeout_decision(request_id, architecture, (time.monotonic() - started) * 1000)

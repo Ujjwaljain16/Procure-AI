@@ -98,6 +98,11 @@ class TestAnalysisTimeout:
 
         assert isinstance(decision, ProcurementDecision)
         assert decision.human_review_required is True
-        assert "timed out" in decision.recommendation.lower()
+        assert "did not complete" in decision.recommendation.lower()
         assert "analysis_timeout" in decision.risk_flags
+        assert decision.telemetry.llm_calls is None
+        assert decision.telemetry.tool_calls is None
+        assert decision.telemetry.latency_ms is not None
+        assert decision.telemetry.latency_ms < 5000  # measured elapsed time, not the 45s budget
+        assert "no policy result" in decision.recommendation.lower()
         assert decision.telemetry.architecture == "single"
