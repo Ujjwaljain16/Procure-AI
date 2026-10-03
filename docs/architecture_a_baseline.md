@@ -48,6 +48,24 @@ finding requires a genuine fix to one of them, this document will record the
 before/after hash and the reason, and the test/eval baseline below will be
 re-run and re-frozen.
 
+## Documented exceptions (re-freeze log)
+
+**2026-10-03 — Tier 2 reliability pass.** Two frozen files changed, each a
+narrow, mechanical edit; nothing about the deterministic pipeline changed.
+
+| File | Before | After | Change and reason |
+|---|---|---|---|
+| `src/agent/single_agent.py` | `67ac73b6fdcc` | `015aff7ccf8b` | `data_access.get_request(...)` → `get_request_validated(...)`, so a structurally broken record fails before any model call. Staged (`staged_agent.py`, not frozen) got the same one-line swap. |
+| `src/agent/validation.py` | `111d6d6ab30b` | `39f826cb730f` | The contract-level recommendation for a Gemini failure now uses the user-facing failure taxonomy (`src/agent/failure_taxonomy.py`) instead of embedding the raw exception class name (e.g. `ClientError`). The raw name still flows through `gemini_unavailable_reason` in logs and stored results. Also one new import. |
+
+Re-verification after the change: the frozen 25-case replay re-run
+(`evaluation/run_comparison.py`) gave 25/25 for both architectures, 0/25
+deterministic-field mismatches, and PASS on `evaluation/regression.py`
+against the prior run on every metric. Full suite: 343 passed.
+
+Unchanged and still frozen: `tools_registry.py`, `prompts.py`,
+`gemini_adapter.py`, `schemas.py`, `policy_engine.py`, `contracts.py`.
+
 ## Model / configuration
 
 - SDK: `google-genai>=1.0,<2`
