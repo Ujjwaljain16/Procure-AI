@@ -1,5 +1,5 @@
 {
-  "note": "Held-out set written after the H1b measurement began; it was used to decide the H1b port, so from now on it is regression corpus, not a fresh held-out set. Known limitations are listed separately and asserted as xfail.",
+  "note": "Held-out set written after the approval-guard measurement began; it was used to decide that change, so from now on it is regression corpus, not a fresh held-out set. Known limitations are listed separately and asserted as xfail.",
   "ordinary_clean": [
     "Finance will decide whether approval is needed once the vendor is verified.",
     "The approval workflow for this category takes about five business days.",

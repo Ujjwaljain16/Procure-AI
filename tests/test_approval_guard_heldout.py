@@ -1,4 +1,4 @@
-"""Regression corpus for the approval guard, from the held-out measurement that justified H1b.
+"""Regression corpus for the approval guard, from the held-out measurement that justified the change.
 
 The guard is a text-level tripwire on model prose. It is not a safety control: the structural
 boundary (no code path purchases, approves, or modifies budget) is what protects the user.

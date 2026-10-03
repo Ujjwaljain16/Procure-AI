@@ -18,9 +18,7 @@ REQUIRED = [
     "docs/architecture.md",
     "docs/workflow.md",
     "docs/final_evaluation.md",
-    "docs/architecture_comparison.md",
     "docs/architecture_decision.md",
-    "docs/architecture_a_baseline.md",
 ]
 DOCS = [ROOT / p for p in REQUIRED]
 STALE_PHRASES = [r"not yet run", r"not run\b", r"not yet available", r"REAL API EVALUATION: not run"]

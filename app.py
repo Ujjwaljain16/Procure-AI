@@ -136,7 +136,7 @@ elif isinstance(result, dict):
     status_text = "Error"
 header_cols[2].metric("Analysis status", status_text)
 
-# -- Decision lifecycle stepper (Tier 1 item 1) ------------------------------
+# -- Decision lifecycle stepper ----------------------------------------------
 if isinstance(result, ProcurementView):
     lifecycle_icon = {"done": "✅", "current": "🔵", "pending": "⬜"}
     st.caption(
@@ -260,7 +260,7 @@ if isinstance(result, ProcurementView):
     view = result
     st.divider()
 
-    # -- Vendor security panel (Tier 1 item 4) -------------------------------
+    # -- Vendor security panel ---------------------------------------------------
     if view.vendor_security is not None:
         vs = view.vendor_security
         status_color = {"verified": "green", "conflicting": "orange", "unavailable": "red", "missing": "orange", "not_applicable": "gray"}

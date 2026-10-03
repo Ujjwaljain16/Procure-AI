@@ -1,6 +1,6 @@
 """A deterministic stand-in for the real Gemini API, used for the
 replay/mocked evaluation mode when the real API is rate-limited or
-unavailable (see docs/architecture_comparison.md for exactly when this
+unavailable (see docs/final_evaluation.md for exactly when this
 applies).
 
 It exercises the full mechanical pipeline -- tool selection, tool
@@ -11,7 +11,7 @@ relevant request fields are present, matching the "prioritize reliability"
 baseline guidance from the Architecture A design). It does NOT simulate
 genuine model reasoning: its recommendation/rationale/analyst-report text is
 templated, not reasoned. This makes it suitable for the deterministic and
-safety metrics in the Phase 6 comparison, but explicitly NOT for judging
+safety metrics in the replay comparison, but explicitly NOT for judging
 semantic recommendation quality -- that requires the real API.
 """
 

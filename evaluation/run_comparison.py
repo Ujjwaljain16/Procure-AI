@@ -17,7 +17,7 @@ identical for both architectures by construction (both call the same
 function). 'agent'-level cases run the full architecture, using the
 deterministic ReplayGeminiClient by default (see evaluation/replay_client.py
 for exactly what it does and does not simulate) or the real Gemini API with
---real (spends API quota -- see docs/architecture_comparison.md for the
+--real (spends API quota -- see docs/final_evaluation.md for the
 daily free-tier limit this project has run into).
 """
 

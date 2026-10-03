@@ -7,7 +7,6 @@ __pycache__/
 evals/results_*.csv
 
 # internal working notes, not part of the submission
-internal_notes/
 
 # run audit log (src/audit.py)
 runs/
