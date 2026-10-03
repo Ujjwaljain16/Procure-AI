@@ -1,0 +1,9 @@
+[project]
+name = "procureai"
+version = "1.0.0"
+description = "AI Procurement Request Copilot: evidence-grounded recommendations with human-only approvals."
+requires-python = ">=3.11,<3.14"
+readme = "README.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

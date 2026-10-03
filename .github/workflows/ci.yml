@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.lock
+      - name: Secrets preflight
+        run: python scripts/preflight_secrets.py
+      - name: Start the local vendor-risk mock (loopback only)
+        run: |
+          python -m uvicorn mock_api.app:app --host 127.0.0.1 --port 8001 &
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8001/health && break; sleep 0.5; done
+      - name: Test suite (no API key; the real-Gemini smoke test skips itself)
+        run: python -m pytest tests/ -q
+      - name: Replay comparison and gate (no quota spent)
+        run: |
+          python evaluation/run_comparison.py
+          latest=$(ls -t evaluation/results/comparison_*.json | head -1)
+          python evaluation/safety_gate.py "$latest"

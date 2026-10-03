@@ -14,7 +14,24 @@ load_dotenv(ROOT / ".env", override=False)
 
 
 def start(cmd: list[str]) -> subprocess.Popen:
-    return subprocess.Popen(cmd, cwd=ROOT)
+    # On Windows each child gets its own process group so it can receive a
+    # CTRL_BREAK event for a graceful shutdown; elsewhere a SIGTERM does it.
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+    return subprocess.Popen(cmd, cwd=ROOT, creationflags=flags)
+
+
+def stop(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        if sys.platform == "win32":
+            proc.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            proc.terminate()
+        proc.wait(timeout=8)
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        proc.kill()
+        proc.wait(timeout=5)
 
 
 def wait_for_api(url: str, proc: subprocess.Popen, timeout_seconds: float = 10.0) -> None:
@@ -92,13 +109,7 @@ def main() -> None:
         print("\nStopping local services ...")
     finally:
         for proc in procs:
-            if proc.poll() is None:
-                proc.terminate()
-        for proc in procs:
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+            stop(proc)
 
 
 if __name__ == "__main__":
