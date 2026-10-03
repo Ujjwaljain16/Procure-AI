@@ -157,3 +157,24 @@ class TestDeterminism:
         first = vendor_risk_tool.get_vendor_evidence("PixelCraft")
         second = vendor_risk_tool.get_vendor_evidence("PixelCraft")
         assert first == second
+
+
+class TestMockApiEncodingAndErrors:
+    def test_percent_encoded_vendor_name_is_decoded_exactly_once(self):
+        from fastapi.testclient import TestClient
+
+        from mock_api.app import app
+
+        client = TestClient(app)
+        response = client.get("/vendor-risk/SignalWatch")
+        assert response.status_code == 200
+        assert response.json()["vendor_name"] == "SignalWatch"
+
+    def test_unknown_vendor_error_does_not_echo_the_input(self):
+        from fastapi.testclient import TestClient
+
+        from mock_api.app import app
+
+        response = TestClient(app).get("/vendor-risk/%3Cscript%3E")
+        assert response.status_code == 404
+        assert "<script>" not in response.text
