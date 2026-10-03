@@ -219,7 +219,7 @@ Earlier live runs and failed attempts are indexed in [`evaluation/correctness/re
 
 ## 6. Ship decision: Architecture A
 
-**Ship Architecture A.** The decision is in [`docs/architecture_decision.md`](docs/architecture_decision.md) (396 words, against a limit of 500).
+**Ship Architecture A.** The decision is in [`docs/architecture_decision.md`](docs/architecture_decision.md) (under the 500-word limit).
 
 - The pre-registered rule required B to show at least two more successful cases, or ten percentage points more, on the primary or secondary metric, with no regression. B showed neither. The rule therefore selects A.
 - Both architectures matched the ground truth on every case, so B's extra orchestration produced no measured quality gain here. It cost about 6 seconds more per case (median) and one more model call.
@@ -300,6 +300,12 @@ Layer 3 (live sample). This spends provider quota. It needs `CLOSEROUTER_API_KEY
 
 Each correctness result records the git revision, whether the worktree was clean, and the ground-truth digest, so a result can be traced to the exact code and expectations that produced it.
 
+The final live run is also exported as one row per case and architecture, in the submission's results format (`evaluation/correctness/results/correctness_real_20261003T142144Z.csv`):
+
+```bash
+python evaluation/correctness/export_csv.py evaluation/correctness/results/correctness_real_20261003T142144Z.json
+```
+
 ## 11. Repository structure
 
 ```
@@ -329,8 +335,6 @@ scripts/                     Documentation check and secrets preflight
 docs/                        Architecture, workflow, decision memo, final evaluation,
                              pre-registered rule, starter-pack fixes, brief, screenshots
 ```
-
-`STUDENT_CHECKLIST.md` and `templates/` are starter-pack files. The product does not use them.
 
 ## Scoring alignment
 

@@ -1,21 +1,36 @@
-# Architecture decision
+# Architecture Decision Memo
 
-**Decision: Ship Architecture A as the default.** Keep Architecture B in the codebase as an evaluated alternative, selectable but not the default. The rule that decided this was written and committed before the final live run (`docs/preregistration_b_rule.md`).
+**Maximum length: 500 words**
 
-**Why the decision rests on the evidence**
+## Decision
+Which architecture would you ship today: **single agent** or **staged / 2-agent**?
 
-Both architectures share one authoritative path: a validated request, the deterministic evidence preflight, the deterministic policy engine, the validator, and human handoff. The model cannot choose the evidence the policy uses. The architectures differ only in orchestration: A is one agent; B is an analyst followed by a reviewer.
+**Ship Architecture A (single agent).** Both architectures share one authoritative path: deterministic evidence gathering, the deterministic policy engine, the validator, and human handoff. The model never chooses the evidence the policy uses. The architectures differ only in orchestration. The pre-registered rule (`docs/preregistration_b_rule.md`) was committed before the final live run and selects A.
 
-So the question is whether B's extra orchestration produces a measurable benefit that justifies its cost.
+## Evidence
+Both architectures ran on the same test set: the 16 pre-registered live cases (`evaluation/correctness/results/correctness_real_20261003T142144Z.json`, Gemini 3.7 Flash through CloseRouter). Offline, both architectures also passed every scored dimension across 26 cases and four fault modes.
 
-- **Offline correctness (26 cases, four fault modes).** Both architectures pass every scored dimension, and their deterministic outputs are identical across normal, hostile, malformed, and outage runs (104 of 104 runs per architecture). Offline evaluation cannot separate them on correctness, because the policy path is shared.
-- **Live, final run (16 cases, one run, Gemini 3.7 Flash through CloseRouter).** All 16 cases were comparable, with no provider failures. A and B each matched the ground truth on recommendation and next action in 16 of 16 cases, and each grounded its evidence in 16 of 16 cases. B had no regressions against A in any deterministic or safety dimension.
-- **Cost.** B's median latency was 24.4 s against 18.2 s for A. B made one more logical model call per case (median 4 against 3).
+| Metric | Single agent | Staged / 2-agent |
+|---|---:|---:|
+| Cases passing your quality criteria | 16 / 16 on recommendation, next action, evidence grounding, policy, and human escalation | 16 / 16 on the same criteria |
+| Avg latency | 18.1 s (median 18.2 s) | 26.0 s (median 24.4 s) |
+| Avg LLM calls | 3.0 | 4.0 |
+| Avg tool calls | 8.0 | 8.0 |
+| Notable policy/grounding failures | None on policy or grounding | None on policy or grounding; no regression against A |
 
-**Rule outcome.** The pre-registered rule required B to show at least two more successful cases, or ten percentage points more, on the primary or secondary metric, with no regression. B showed zero more successes and no regressions, so the rule selects A.
+The live model made more calls than the offline contract allows, in every case, in both architectures. Call-count dimensions d12 and d13 therefore did not pass. The cause is supplemental tool lookups, which are identity-bound and cannot change a policy field.
 
-**What this does not show.** Sixteen cases and one run cannot establish statistical significance, and no significance claim is made. The live model also issued supplemental tool lookups in both architectures, which the offline contract did not predict. Recommendation text is not scored by the offline evaluator.
+## Trade-offs
+Nothing measurable improved. Staged B matched A on all 16 cases and no deterministic or safety dimension regressed. It cost about 8 s more on average and one more model call per case. The reviewer stage added latency without changing any outcome on this set.
 
-**Conditions to revisit.** Re-evaluate B if a larger live sample shows a repeatable gain on recommendation or evidence grounding, or if a future policy needs a separate reviewer stage that a single agent cannot provide cleanly.
+## Risks / limitations
+- Sixteen cases from one run. The result is descriptive and makes no significance claim.
+- The live model's supplemental lookups exceed the offline call-count contract.
+- The UI can show a repeated evidence row when a lookup is repeated. Policy fields are unaffected.
+- Prompt-injection visibility is pattern-based and is not a complete defence.
+- Recommendation text is not scored offline.
 
-**Limits to state with the result.** Prompt-injection visibility is a deterministic, pattern-based signal, and it is not a complete defense; paraphrased attacks may evade it.
+Before production use, I would validate on a larger live sample, review recommendation text by people, set a per-request call budget, add authentication and persistence, and connect real vendor and approval systems.
+
+## Why this is the right MVP
+The single agent meets every quality criterion on this evidence, with fewer model calls and lower latency. The authority boundary sits in code under either architecture, so the second agent adds cost without adding safety. The product is recommendation-only, and every sensitive approval stays with a human, so the simpler system is sufficient for the client problem. I would revisit B if a larger live sample showed a repeatable gain on recommendation or evidence grounding, or if a future policy needed a reviewer stage that one agent cannot provide cleanly.
