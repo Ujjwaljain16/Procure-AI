@@ -101,7 +101,7 @@ if run_clicked:
 result = st.session_state.results.get(cache_key)
 
 header_cols[0].metric("Request", request_id)
-header_cols[1].metric("Architecture", "Single agent" if architecture == "single" else "Staged (not yet available)")
+header_cols[1].metric("Architecture", "Single agent" if architecture == "single" else "Staged (two-agent)")
 status_text = "Not yet analyzed"
 if isinstance(result, ProcurementView):
     status_text = result.analysis_status
