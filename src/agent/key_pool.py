@@ -44,6 +44,11 @@ class PooledGeminiClient:
     """Drop-in for GeminiClientProtocol, backed by several real clients."""
 
     _client_class = GeminiClient
+    counts_api_attempts = True  # the underlying real clients record every HTTP attempt, rotation included
+
+    @property
+    def model_name(self) -> str:
+        return self._clients[0].model_name
 
     def __init__(self, keys: list[str], model: str):
         if not keys:

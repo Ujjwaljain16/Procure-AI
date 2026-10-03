@@ -42,6 +42,13 @@ MAX_TOOL_TURNS = 6
 ARCHITECTURE_NAME = "single"
 
 
+def _api_attempts_since(client, before: int):
+    """Real HTTP attempts this thread made since ``before``; None when the client is not a real API client."""
+    from src.agent.attempts import current_attempts
+
+    return current_attempts() - before if getattr(client, "counts_api_attempts", False) else None
+
+
 @dataclass(frozen=True)
 class AgentRunResult:
     """Everything one Architecture A run produced, for a consumer (the UI)
@@ -92,6 +99,9 @@ def run_single_agent_with_trace(
     alongside the ``ProcurementDecision``.
     """
     start = time.monotonic()
+    from src.agent.attempts import current_attempts
+
+    attempts_before = current_attempts()
     raw = data_access.get_request_validated(request_id)  # KeyError / MalformedRequestError propagate before any LLM call
 
     # Authoritative evidence is gathered in code before any model call, so the
@@ -189,6 +199,8 @@ def run_single_agent_with_trace(
         tool_names=registry.tool_names,
         architecture=ARCHITECTURE_NAME,
         latency_ms=latency_ms,
+        api_attempts=_api_attempts_since(active_client, attempts_before),
+        model=getattr(active_client, "model_name", None),
     )
 
     logger.info(
