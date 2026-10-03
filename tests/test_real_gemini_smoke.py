@@ -1,7 +1,7 @@
 """Optional real end-to-end smoke test against the live Gemini API.
 
-Skipped automatically when no GEMINI_API_KEY is available (e.g. in CI or a
-fresh clone) -- the rest of the test suite never depends on this file or on
+Opt-in only: runs when RUN_REAL_GEMINI_TESTS=1 is set, so a routine test run
+never spends quota even when a key is configured locally -- the rest of the test suite never depends on this file or on
 network access. Run manually with a real key present (via .env or the
 environment) to exercise one real request through the full single-agent
 pipeline, including a real function-calling round trip and a real
@@ -22,7 +22,8 @@ import pytest
 from src.agent.single_agent import run_single_agent
 
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("GEMINI_API_KEY"), reason="no GEMINI_API_KEY supplied -- real smoke test not run"
+    os.environ.get("RUN_REAL_GEMINI_TESTS") != "1",
+    reason="real-API test is opt-in: set RUN_REAL_GEMINI_TESTS=1 (it spends quota)",
 )
 
 

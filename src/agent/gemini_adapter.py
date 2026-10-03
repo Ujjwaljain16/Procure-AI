@@ -186,7 +186,9 @@ class GeminiClient:
             if name:
                 calls.append(ToolCall(call_id=str(call_id), name=name, arguments=args))
 
-        text = getattr(response, "text", None)
+        # The SDK warns when .text is read from a response that contains
+        # function calls, so only read it for a plain text answer.
+        text = None if calls else getattr(response, "text", None)
         raw_content = None
         candidates = getattr(response, "candidates", None) or []
         if candidates:
