@@ -93,6 +93,7 @@ _RISK_FLAG_LABELS = {
     "vendor_risk_unavailable": "Vendor risk service unavailable",
     "missing_information": "Missing information",
     "prompt_injection_detected": "Possible prompt injection detected in request text",
+    "vendor_review_unverified": "Vendor approval date cannot be verified",
 }
 
 _CHECK_STATUS_LABELS = {
@@ -373,6 +374,7 @@ _ASSESSMENT_STATE_TO_EVIDENCE_STATUS = {
     AssessmentState.EXPIRED: "missing",
     AssessmentState.NOT_COMPLETED: "missing",
     AssessmentState.MISSING: "missing",
+    AssessmentState.UNKNOWN: "missing",
     AssessmentState.UNAVAILABLE: "unavailable",
     AssessmentState.CONFLICTING: "conflicting",
 }
@@ -382,6 +384,7 @@ _ASSESSMENT_STATE_ACTION_TEXT = {
     AssessmentState.EXPIRED: "Vendor security review is outdated. Request a refreshed assessment.",
     AssessmentState.NOT_COMPLETED: "Vendor security assessment has not been completed. Required before proceeding.",
     AssessmentState.MISSING: "Vendor security assessment status is unknown. Verify before proceeding.",
+    AssessmentState.UNKNOWN: "Vendor is marked approved but its review date is missing. Confirm the assessment date before proceeding.",
     AssessmentState.UNAVAILABLE: "Vendor risk service unavailable. Manual verification required.",
     AssessmentState.CONFLICTING: "Registry and live service disagree. Manual security verification required.",
 }

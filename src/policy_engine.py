@@ -474,6 +474,7 @@ class AssessmentState(str, Enum):
     MISSING = "missing"
     UNAVAILABLE = "unavailable"
     CONFLICTING = "conflicting"
+    UNKNOWN = "unknown"  # status says approved, but no review date: freshness cannot be established
 
 
 def _within_validity(review_date: Optional[date], reference_date: date, validity_days: int) -> Optional[bool]:
@@ -528,6 +529,10 @@ def evaluate_vendor_security_assessment(
             return AssessmentState.EXPIRED
         if status == "approved":
             fresh = _within_validity(vendor_risk.last_review_date, reference_date, SECURITY_ASSESSMENT_VALIDITY_DAYS)
+            if fresh is None:
+                # No review date: "current for 365 days from its review date" (section 5) cannot be shown,
+                # so the assessment is not treated as current.
+                return AssessmentState.UNKNOWN
             return AssessmentState.EXPIRED if fresh is False else AssessmentState.CURRENT
 
     return AssessmentState.MISSING
@@ -543,6 +548,7 @@ _ASSESSMENT_STATE_DETAIL = {
     AssessmentState.EXPIRED: f"Vendor security assessment is older than {SECURITY_ASSESSMENT_VALIDITY_DAYS} days.",
     AssessmentState.NOT_COMPLETED: "Vendor security assessment has not been completed.",
     AssessmentState.MISSING: "Vendor security assessment status is unknown.",
+    AssessmentState.UNKNOWN: "Vendor is marked approved, but its review date is missing; freshness cannot be verified.",
     AssessmentState.CURRENT: "Vendor has a current security assessment on file.",
 }
 
@@ -550,6 +556,7 @@ _ASSESSMENT_STATE_RISK_FLAG = {
     AssessmentState.CONFLICTING: "conflicting_vendor_evidence",
     AssessmentState.UNAVAILABLE: "vendor_risk_unavailable",
     AssessmentState.EXPIRED: "vendor_review_expired",
+    AssessmentState.UNKNOWN: "vendor_review_unverified",
 }
 
 _DATA_ACCESS_SECURITY_TRIGGERS: tuple[tuple[str, str], ...] = (
