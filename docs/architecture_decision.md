@@ -10,7 +10,7 @@
 
 **Real-model sample (6 cases, one run each, gemini-2.5-flash, temperature 0).**
 - B was slower in 5 of 6 cases (exact two-sided sign test, p ≈ 0.22). That is not statistically established at this sample size.
-- Median latency: A 12.4 s (95% bootstrap CI 10.1–14.6); B 20.8 s (CI 13.2–27.0). The intervals overlap heavily. The earlier "+68%" headline is not supported.
+- Median latency: A 12.4 s (95% bootstrap CI 10.1–14.6); B 20.8 s (CI 13.2–27.0). The intervals overlap heavily. The earlier relative-latency headline is not supported by this sample.
 - Each architecture had one transient 503 during a model call. Both degraded to a human-review decision with the reason recorded. B's failure was not evidence of weaker reasoning.
 
 **Quality.** Not measured. B's analyst raised one useful clarification (whether a NeuralDesk request was a new product or a variant of an existing one). We observed it once and do not treat it as a measured advantage.
