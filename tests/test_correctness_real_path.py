@@ -342,3 +342,47 @@ def test_selfcheck_masked_outage_is_caught_as_a_fault_that_was_not_observed():
         assert row["dimensions"]["d10_outage_and_malformed_parity"] is False
         assert "fault_not_observed" in row["failure_reasons"]
     assert payload["integrity"]["faults_not_observed"] == 2
+
+
+# --- the live sample -------------------------------------------------------------------------------
+
+
+def test_live_sample_is_eight_justified_cases_that_exist_in_the_ground_truth():
+    assert len(ev.REAL_SAMPLE) == 8
+    known = {c["case_id"] for c in TRUTH["cases"]}
+    for case_id, reason in ev.REAL_SAMPLE:
+        assert case_id in known, case_id
+        assert len(reason) > 20, case_id  # a real justification, not a placeholder
+
+
+def test_production_run_refuses_a_case_outside_the_sample():
+    with pytest.raises(ValueError, match="limited to the sample"):
+        ev.run_real(TRUTH, archs=ev.ARCHS, modes=("normal",), case_ids={"S-1002"})
+
+
+def test_production_run_refuses_fewer_than_both_architectures_or_fault_modes():
+    with pytest.raises(ValueError):
+        ev.run_real(TRUTH, archs=("single",), modes=("normal",))
+    with pytest.raises(ValueError):
+        ev.run_real(TRUTH, archs=ev.ARCHS, modes=("outage",))
+
+
+def test_production_default_is_the_sample_on_both_architectures_with_a_descriptive_ab_view(monkeypatch):
+    # Stand the production client on the fake SDK boundary: the sample logic is exercised, nothing is sent.
+    monkeypatch.setattr(ev, "_production_client", lambda arch: ev._fake_boundary_client(arch, [FakeGenaiTransport("normal", {})]))
+    payload = ev.run_real(TRUTH, archs=ev.ARCHS, modes=("normal",))
+    assert {r["case_id"] for r in payload["rows"]} == set(ev.REAL_SAMPLE_IDS)
+    assert len(payload["rows"]) == len(ev.REAL_SAMPLE) * len(ev.ARCHS)
+    assert len(payload["ab_comparison"]) == len(ev.REAL_SAMPLE)
+    for entry in payload["ab_comparison"]:
+        assert entry["why_included"]
+        assert set(entry) >= {"single", "staged", "deterministic_identical"}
+        for arch in ("single", "staged"):
+            assert {"logical_llm_calls", "api_attempts", "tool_calls", "latency_ms", "failing_dimensions"} <= set(entry[arch])
+    assert "significance" in payload["ab_note"]
+
+
+def test_cli_real_rejects_a_single_architecture():
+    with pytest.raises(SystemExit) as info:
+        ev.main(["--real", "--arch", "single"])
+    assert info.value.code == 2

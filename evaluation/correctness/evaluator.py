@@ -763,11 +763,89 @@ def integrity_summary(rows: list[dict]) -> dict:
     }
 
 
+# The live sample: eight cases chosen to cover the behaviours the architecture is built around. The full
+# 26-case set is evaluated offline; live calls are spent only here. Both architectures run on exactly these
+# cases, with the same model, environment and key configuration. Changing this list is a code change.
+REAL_SAMPLE = (
+    ("S-1001", "normal request: low-value approved vendor, with an existing catalog agreement (overlap)"),
+    ("S-1007", "conflicting vendor evidence: registry says approved, live review is expired"),
+    ("S-UNK", "unknown vendor: not in the registry, live service has no record"),
+    ("S-1004", "security and privacy: customer PII with cross-region vendor storage"),
+    ("S-INJ-REQ", "prompt injection in request text, on an otherwise clean request"),
+    ("S-B06", "threshold edge: just above $25,000, the CFO tier"),
+    ("S-1009", "unavailable vendor path: vendor-risk service returns an error on confidential documents"),
+    ("S-1006", "incomplete request: missing cost, users and data access, with an injected instruction"),
+)
+REAL_SAMPLE_IDS = frozenset(case_id for case_id, _ in REAL_SAMPLE)
+
+
+def ab_comparison(rows: list[dict]) -> list[dict]:
+    """Descriptive A-versus-B view of the live sample, one entry per case. Eight cases support no
+    significance claim; this exists so the reader can see each case side by side."""
+    out = []
+    for case_id, reason in REAL_SAMPLE:
+        cells = {r["architecture"]: r for r in rows if r["case_id"] == case_id and r["mode"] == "normal"}
+        if set(cells) != set(ARCHS):
+            continue
+        a, b = cells["single"], cells["staged"]
+        out.append({
+            "case_id": case_id,
+            "why_included": reason,
+            "deterministic_identical": _deterministic_tuple(_as_observed(a)) == _deterministic_tuple(_as_observed(b)),
+            "single": _ab_cell(a),
+            "staged": _ab_cell(b),
+        })
+    return out
+
+
+def _as_observed(row: dict) -> dict:
+    actual = row["actual"]
+    return {
+        "rejected": actual["rejected"],
+        "approvals": actual["approvals"],
+        "flags": actual["risk_flags"],
+        "missing": actual["missing_information"],
+        "human_review_required": actual["human_review_required"],
+    }
+
+
+def _ab_cell(row: dict) -> dict:
+    actual = row["actual"]
+    return {
+        "recommendation_class": actual["recommendation_class"],
+        "approvals": actual["approvals"],
+        "risk_flags": actual["risk_flags"],
+        "missing_information": actual["missing_information"],
+        "human_review_required": actual["human_review_required"],
+        "logical_llm_calls": actual["logical_llm_calls"],
+        "api_attempts": actual["api_attempts"],
+        "http_calls": actual["http_calls"],
+        "tool_calls": actual["tool_calls"],
+        "latency_ms": actual["latency_ms"],
+        "gemini_unavailable_reason": actual["gemini_unavailable_reason"],
+        "failing_dimensions": [d for d, v in row["dimensions"].items() if v is False],
+    }
+
+
 def run_real(truth: dict, archs=ARCHS, modes=("normal",), case_ids: Optional[set] = None, make_transports=None) -> dict:
     """Real-model correctness run. The same ground truth, cases, and scorers as the offline run; only the
-    transport differs. With make_transports None it is production (live Gemini, normal mode only)."""
+    transport differs. With make_transports None it is production: live Gemini, normal mode, both
+    architectures, and only the REAL_SAMPLE cases."""
+    production = make_transports is None
+    if production:
+        if tuple(archs) != ARCHS or tuple(modes) != ("normal",):
+            raise ValueError("live runs use both architectures and normal mode only")
+        if case_ids is None:
+            case_ids = set(REAL_SAMPLE_IDS)
+        if not set(case_ids) <= REAL_SAMPLE_IDS:
+            raise ValueError(f"live runs are limited to the sample; not sampled: {sorted(set(case_ids) - REAL_SAMPLE_IDS)}")
     run = evaluate(truth, archs=archs, modes=modes, case_ids=case_ids, factory=real_factory(make_transports))
-    return _payload(truth, run, archs, modes, layer="correctness, real-model transport (same ground truth and scorers as offline)")
+    payload = _payload(truth, run, archs, modes, layer="correctness, real-model transport (same ground truth and scorers as offline)")
+    if production:
+        payload["sample"] = [{"case_id": c, "why_included": r} for c, r in REAL_SAMPLE]
+        payload["ab_comparison"] = ab_comparison(run["rows"])
+        payload["ab_note"] = "descriptive only; eight cases support no significance claim"
+    return payload
 
 
 def run_offline(truth: dict, archs=ARCHS, modes=MODES, case_ids: Optional[set] = None) -> dict:
@@ -836,8 +914,8 @@ def main(argv: list[str]) -> int:
 
     archs = (args.arch,) if args.arch else ARCHS
     if args.real:
-        if args.modes:
-            parser.error("--real runs the normal mode only; fault modes are offline fault injections")
+        if args.modes or args.arch:
+            parser.error("--real runs normal mode for both architectures on the live sample; faults are offline only")
         from dotenv import load_dotenv
 
         load_dotenv(ROOT / ".env", override=False)
