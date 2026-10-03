@@ -22,10 +22,68 @@ from decimal import Decimal
 from typing import Optional
 
 from src.agent.single_agent import AgentRunResult
-from src.policy_engine import CheckStatus, PolicyCheck
+from src.policy_engine import (
+    AssessmentState,
+    CheckStatus,
+    PolicyCheck,
+    VendorRegistryEvidence,
+    VendorRiskEvidence,
+    evaluate_vendor_security_assessment,
+)
 
 MISSING_LABEL = "Missing"
 NOT_PROVIDED_LABEL = "Not provided"
+
+# A small, reusable uncertainty-state taxonomy (Tier 1 item 5) -- used
+# wherever a piece of evidence needs a status badge more specific than a
+# plain "Missing"/"Not provided" label, so VERIFIED/UNAVAILABLE/CONFLICTING
+# read as distinct states instead of all collapsing into a vague "Unknown".
+# Pure labeling over already-decided data, never a new classification rule.
+_EVIDENCE_STATUS_LABELS = {
+    "verified": "Verified",
+    "missing": "Missing",
+    "unavailable": "Unavailable",
+    "conflicting": "Conflicting",
+    "not_applicable": "Not applicable",
+}
+_EVIDENCE_STATUS_ICONS = {
+    "verified": "✓",  # check
+    "missing": "⚠",  # warning
+    "unavailable": "⛔",  # no-entry
+    "conflicting": "⚠",  # warning
+    "not_applicable": "—",  # em dash
+}
+
+# Raw gemini_unavailable_reason values (an exception class name, or a literal
+# symbolic token this codebase controls) mapped to a small, user-facing
+# failure taxonomy. Anything not listed defaults to MODEL_UNAVAILABLE -- the
+# safest reading for a reason that reached this module specifically through
+# gemini_unavailable_reason. The raw reason is never discarded: it keeps
+# flowing through logs and stored evaluation results unchanged; only the
+# headline message a human sees changes.
+_FAILURE_CATEGORY_MESSAGES = {
+    "MODEL_UNAVAILABLE": "Automated analysis is temporarily unavailable.",
+    "TOOL_UNAVAILABLE": "A required data source is temporarily unavailable.",
+    "REQUEST_INVALID": "This request could not be processed.",
+    "POLICY_EVALUATION_FAILED": "Policy evaluation could not be completed.",
+    "ANALYSIS_TIMEOUT": "Analysis timed out.",
+}
+_KNOWN_FAILURE_REASONS = {
+    "GeminiConfigurationError": "MODEL_UNAVAILABLE",
+    # Identity entries so a caller that already knows the category (e.g.
+    # app.py's non-Gemini error paths: an invalid request, an unhandled
+    # exception, a timeout) can go through the same function and get the
+    # same vetted message, instead of a second hardcoded copy of the text.
+    **{name: name for name in _FAILURE_CATEGORY_MESSAGES},
+}
+
+
+def classify_failure_reason(raw_reason: str) -> tuple[str, str]:
+    """Maps a raw technical failure reason -- an exception class name, or
+    an already-known category name -- to (category, user-facing message).
+    See the module-level comment above _KNOWN_FAILURE_REASONS."""
+    category = _KNOWN_FAILURE_REASONS.get(raw_reason, "MODEL_UNAVAILABLE")
+    return category, _FAILURE_CATEGORY_MESSAGES[category]
 
 # Maps a request-detail field key to the exact POL-1 missing_information
 # label policy_engine.py uses for it, so "is this field missing" is read
@@ -108,7 +166,44 @@ class ToolCallView:
 @dataclass(frozen=True)
 class AuditStageView:
     label: str
-    status: str  # "done" | "skipped" | "failed"
+    status: str  # "done" | "skipped" | "failed" | "flagged"
+
+
+@dataclass(frozen=True)
+class VendorSecurityView:
+    """First-class vendor-freshness panel (Tier 1 item 4) -- a structured
+    comparison of the internal registry vs. the live vendor-risk service,
+    built from the same typed evidence objects evaluate_policy() itself
+    reads (src.policy_engine.VendorRegistryEvidence / VendorRiskEvidence),
+    not from parsing the free-text EvidenceItem finding strings."""
+
+    vendor_name: str
+    registry_status: Optional[str]
+    registry_reviewed_date: Optional[str]
+    live_status: Optional[str]
+    live_verified_date: Optional[str]
+    overall_status: str  # one of _EVIDENCE_STATUS_LABELS' keys
+    overall_label: str
+    overall_icon: str
+    action_text: str
+
+
+@dataclass(frozen=True)
+class ConstraintView:
+    icon: str
+    text: str
+
+
+@dataclass(frozen=True)
+class LifecycleStageView:
+    label: str
+    state: str  # "done" | "current" | "pending"
+
+
+@dataclass(frozen=True)
+class LifecycleView:
+    stages: tuple[LifecycleStageView, ...]
+    branch: str  # "default" | "missing_information" | "evidence_unavailable"
 
 
 @dataclass(frozen=True)
@@ -127,13 +222,16 @@ class ProcurementView:
     analysis_status: str  # "Analyzed" | "Automated analysis unavailable"
     list_status_badge: str  # "READY" | "REVIEW" | "MISSING" | "RISK" | "UNAVAILABLE"
     error_banner: Optional[str]
+    failure_category: Optional[str]  # MODEL_UNAVAILABLE | TOOL_UNAVAILABLE | REQUEST_INVALID | POLICY_EVALUATION_FAILED | ANALYSIS_TIMEOUT
 
     request_details: tuple[FieldView, ...]
     evidence: tuple[EvidenceView, ...]
     policy_checks: tuple[PolicyCheckView, ...]
+    vendor_security: Optional[VendorSecurityView]
 
     recommendation: str
     rationale: Optional[str]
+    constraints_summary: tuple[ConstraintView, ...]
     next_step: str
 
     required_approvals: tuple[str, ...]
@@ -143,6 +241,7 @@ class ProcurementView:
     human_handoff: HumanHandoffView
     handoff_summary_text: str
 
+    lifecycle: LifecycleView
     tool_calls: tuple[ToolCallView, ...]
     audit_timeline: tuple[AuditStageView, ...]
     telemetry: TelemetryView
@@ -249,13 +348,28 @@ _AUDIT_TOOL_STAGES = (
     ("search_purchase_history", "Purchase history retrieved"),
 )
 
+# PolicyCheckView.status_kind -> AuditStageView.status: "flagged" (not
+# "failed") for a required/REQUIRED check, since a policy requirement firing
+# correctly is expected behavior, not a malfunction -- "failed" is reserved
+# for a genuine pipeline failure (e.g. the model call itself).
+_CHECK_KIND_TO_STAGE_STATUS = {"ok": "done", "flagged": "flagged", "skipped": "skipped"}
 
-def _build_audit_timeline(tool_calls: tuple[ToolCallView, ...], gemini_unavailable_reason: Optional[str]) -> tuple[AuditStageView, ...]:
+
+def _build_audit_timeline(
+    tool_calls: tuple[ToolCallView, ...], policy_checks: tuple[PolicyCheckView, ...], gemini_unavailable_reason: Optional[str]
+) -> tuple[AuditStageView, ...]:
+    """Tier 1 item 3 ("Decision Trace"): one stage per retrieval step plus
+    one stage per individual POL-rule check (not a single flattened "Policy
+    evaluated" stage), so the trace reads like a numbered audit log instead
+    of a summary. Every POL-rule stage is read directly off
+    result.policy_evaluation.checks -- no re-evaluation."""
     called = {tc.tool_name for tc in tool_calls}
     stages = [AuditStageView("Request received", "done")]
     for tool_name, label in _AUDIT_TOOL_STAGES:
         stages.append(AuditStageView(label, "done" if tool_name in called else "skipped"))
-    stages.append(AuditStageView("Policy evaluated", "done"))
+    for check in policy_checks:
+        status = _CHECK_KIND_TO_STAGE_STATUS.get(check.status_kind, "done")
+        stages.append(AuditStageView(f"Policy {check.rule_id} evaluated -> {check.status_label}", status))
     stages.append(AuditStageView("Recommendation generated", "failed" if gemini_unavailable_reason else "done"))
     stages.append(AuditStageView("Human review determined", "done"))
     return tuple(stages)
@@ -269,6 +383,104 @@ def _list_status_badge(decision, gemini_unavailable_reason: Optional[str]) -> st
     if decision.risk_flags:
         return "RISK"
     return "READY"
+
+
+_ASSESSMENT_STATE_TO_EVIDENCE_STATUS = {
+    AssessmentState.CURRENT: "verified",
+    AssessmentState.EXPIRED: "missing",
+    AssessmentState.NOT_COMPLETED: "missing",
+    AssessmentState.MISSING: "missing",
+    AssessmentState.UNAVAILABLE: "unavailable",
+    AssessmentState.CONFLICTING: "conflicting",
+}
+
+_ASSESSMENT_STATE_ACTION_TEXT = {
+    AssessmentState.CURRENT: "No action needed -- vendor security assessment is current.",
+    AssessmentState.EXPIRED: "Vendor security review is outdated. Request a refreshed assessment.",
+    AssessmentState.NOT_COMPLETED: "Vendor security assessment has not been completed. Required before proceeding.",
+    AssessmentState.MISSING: "Vendor security assessment status is unknown. Verify before proceeding.",
+    AssessmentState.UNAVAILABLE: "Vendor risk service unavailable. Manual verification required.",
+    AssessmentState.CONFLICTING: "Registry and live service disagree. Manual security verification required.",
+}
+
+
+def _build_vendor_security(
+    registry_evidence: Optional[VendorRegistryEvidence], vendor_risk_evidence: Optional[VendorRiskEvidence]
+) -> Optional[VendorSecurityView]:
+    """Tier 1 item 4: re-groups the two vendor evidence rows the system
+    already retrieved into one structured comparison card, reusing
+    evaluate_vendor_security_assessment() -- the exact function
+    evaluate_policy() itself calls -- so the CONFLICTING/UNAVAILABLE/VERIFIED
+    verdict here is read from the same decision, never re-derived."""
+    if registry_evidence is None and vendor_risk_evidence is None:
+        return None
+
+    vendor_name = (
+        (registry_evidence.vendor_name if registry_evidence else None)
+        or (vendor_risk_evidence.vendor_name if vendor_risk_evidence else None)
+        or "Unknown vendor"
+    )
+    state = evaluate_vendor_security_assessment(registry_evidence, vendor_risk_evidence)
+    status = _ASSESSMENT_STATE_TO_EVIDENCE_STATUS[state]
+
+    live_available = vendor_risk_evidence is not None and vendor_risk_evidence.security_review_status is not None
+    return VendorSecurityView(
+        vendor_name=vendor_name,
+        registry_status=registry_evidence.security_status if registry_evidence else None,
+        registry_reviewed_date=(
+            registry_evidence.security_review_date.isoformat() if registry_evidence and registry_evidence.security_review_date else None
+        ),
+        live_status=(vendor_risk_evidence.security_review_status if live_available else ("Unavailable" if vendor_risk_evidence else None)),
+        live_verified_date=(
+            vendor_risk_evidence.last_review_date.isoformat() if vendor_risk_evidence and vendor_risk_evidence.last_review_date else None
+        ),
+        overall_status=status,
+        overall_label=_EVIDENCE_STATUS_LABELS[status],
+        overall_icon=_EVIDENCE_STATUS_ICONS[status],
+        action_text=_ASSESSMENT_STATE_ACTION_TEXT[state],
+    )
+
+
+def _build_constraints_summary(policy_checks: tuple[PolicyCheckView, ...]) -> tuple[ConstraintView, ...]:
+    """Tier 1 item 2(a): a compact ✓/⚠ checklist meant to sit right next to
+    the recommendation, re-labeling the same policy_checks data the full
+    Policy checks panel already shows -- not a second source of truth."""
+    return tuple(ConstraintView(icon="✓" if c.status_kind == "ok" else "⚠", text=c.detail) for c in policy_checks if c.status_kind != "skipped")
+
+
+_LIFECYCLE_DEFAULT = (
+    "Received",
+    "Analyzing",
+    "Evidence gathered",
+    "Policy checked",
+    "Recommendation ready",
+    "Human review",
+    "Ready for next action",
+)
+_LIFECYCLE_MISSING_INFO = ("Received", "Missing information", "Requester action required")
+_LIFECYCLE_EVIDENCE_UNAVAILABLE = ("Received", "Evidence unavailable", "Human verification required")
+
+
+def _build_lifecycle(decision, gemini_unavailable_reason: Optional[str]) -> LifecycleView:
+    """Tier 1 item 1: which named stage sequence applies, and where the
+    request currently sits in it, read from the exact same fields
+    _list_status_badge() already reads -- a richer rendering of an existing
+    classification, not a new one. Every run reaching this function has
+    already completed synchronously, so stages up to and including the
+    current one are "done"/"current"; what's actually still pending is a
+    human action, never more system work."""
+    if gemini_unavailable_reason is not None:
+        labels, branch, current_index = _LIFECYCLE_EVIDENCE_UNAVAILABLE, "evidence_unavailable", 1
+    elif decision.missing_information:
+        labels, branch, current_index = _LIFECYCLE_MISSING_INFO, "missing_information", 1
+    else:
+        labels, branch, current_index = _LIFECYCLE_DEFAULT, "default", 5  # "Human review" -- always required, POL-11
+
+    stages = []
+    for index, label in enumerate(labels):
+        state = "done" if index < current_index else ("current" if index == current_index else "pending")
+        stages.append(LifecycleStageView(label=label, state=state))
+    return LifecycleView(stages=tuple(stages), branch=branch)
 
 
 def build_procurement_view(result) -> ProcurementView:
@@ -295,31 +507,37 @@ def build_procurement_view(result) -> ProcurementView:
         analyst_note = "Analyst observations: " + "; ".join(analyst_report.observations)
         rationale = f"{rationale}\n\n{analyst_note}" if rationale else analyst_note
 
+    policy_checks = _build_policy_checks(result.policy_evaluation.checks)
+    failure_category = classify_failure_reason(result.gemini_unavailable_reason)[0] if result.gemini_unavailable_reason else None
+
     return ProcurementView(
         request_id=decision.request_id,
         analysis_status="Automated analysis unavailable" if result.gemini_unavailable_reason else "Analyzed",
         list_status_badge=_list_status_badge(decision, result.gemini_unavailable_reason),
         error_banner=(
-            f"AI analysis unavailable. Reason: {result.gemini_unavailable_reason}. "
-            "System response: no procurement action was taken. Next step: manual review."
+            f"{classify_failure_reason(result.gemini_unavailable_reason)[1]} No procurement action was taken. Next step: manual review."
             if result.gemini_unavailable_reason
             else None
         ),
+        failure_category=failure_category,
         request_details=_build_request_details(
             result.raw_request, employee.name if employee else None, registry.employee_department(), tuple(decision.missing_information)
         ),
         evidence=_build_evidence(registry.evidence_index()),
-        policy_checks=_build_policy_checks(result.policy_evaluation.checks),
+        policy_checks=policy_checks,
+        vendor_security=_build_vendor_security(registry.vendor_registry_evidence(), registry.vendor_risk_evidence()),
         recommendation=decision.recommendation,
         rationale=rationale,
+        constraints_summary=_build_constraints_summary(policy_checks),
         next_step=decision.next_step,
         required_approvals=tuple(decision.required_approvals),
         risk_flags=risk_flags,
         missing_information=tuple(decision.missing_information),
         human_handoff=_build_human_handoff(decision, risk_flags),
         handoff_summary_text=_build_handoff_summary_text(decision),
+        lifecycle=_build_lifecycle(decision, result.gemini_unavailable_reason),
         tool_calls=tool_calls,
-        audit_timeline=_build_audit_timeline(tool_calls, result.gemini_unavailable_reason),
+        audit_timeline=_build_audit_timeline(tool_calls, policy_checks, result.gemini_unavailable_reason),
         telemetry=TelemetryView(
             architecture=(telemetry.architecture if telemetry else "single") or "single",
             llm_calls=telemetry.llm_calls if telemetry else None,

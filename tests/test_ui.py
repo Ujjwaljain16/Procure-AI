@@ -14,7 +14,7 @@ from __future__ import annotations
 import requests
 
 from src.agent.single_agent import run_single_agent_with_trace
-from src.ui.view_model import MISSING_LABEL, NOT_PROVIDED_LABEL, build_procurement_view
+from src.ui.view_model import MISSING_LABEL, NOT_PROVIDED_LABEL, build_procurement_view, classify_failure_reason
 from tests.agent_fakes import ScriptedGeminiClient, stop_turn, tool_call, tool_turn
 from tests.test_agent_single import _synthesis
 
@@ -217,6 +217,213 @@ class TestLlmUnavailableStateRendersSafely:
         assert "unavailable" in view.error_banner.lower()
         assert view.human_handoff.required is True
         assert view.list_status_badge == "UNAVAILABLE"
+
+
+class TestClassifyFailureReason:
+    def test_known_reasons_map_to_their_category(self):
+        assert classify_failure_reason("GeminiConfigurationError")[0] == "MODEL_UNAVAILABLE"
+        assert classify_failure_reason("ANALYSIS_TIMEOUT")[0] == "ANALYSIS_TIMEOUT"
+
+    def test_an_unrecognized_raw_exception_name_defaults_to_model_unavailable(self):
+        category, message = classify_failure_reason("SomeBrandNewSdkExceptionType")
+        assert category == "MODEL_UNAVAILABLE"
+        assert "SomeBrandNewSdkExceptionType" not in message  # the raw name never leaks into the headline
+
+    def test_the_message_never_contains_a_raw_exception_class_name(self):
+        for raw in ("ClientError", "ServerError", "GeminiConfigurationError"):
+            _, message = classify_failure_reason(raw)
+            assert raw not in message
+
+
+class TestErrorBannerNeverLeaksRawExceptionNames:
+    def test_missing_api_key_banner_does_not_say_geminiconfigurationerror(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        result = run_single_agent_with_trace("REQ-1001")
+        view = build_procurement_view(result)
+
+        assert "GeminiConfigurationError" not in view.error_banner
+        assert view.failure_category == "MODEL_UNAVAILABLE"
+
+
+class TestVendorSecurityPanel:
+    def test_conflicting_evidence_renders_both_sides_with_a_conflicting_verdict(self, monkeypatch):
+        from src.tools import vendor_risk as vendor_risk_tool
+
+        monkeypatch.setattr(
+            vendor_risk_tool.vendor_client,
+            "get_vendor_risk",
+            lambda name, timeout_seconds=3.0: {
+                "security_review_status": "expired",
+                "last_review_date": "2025-07-01",
+                "processes_personal_data": False,
+                "stores_data_outside_region": False,
+            },
+        )
+        client = ScriptedGeminiClient(
+            turns=[tool_turn(tool_call("get_vendor_evidence", vendor_name="SignalWatch")), stop_turn()],
+            structured_result=_synthesis(evidence_refs=["E1", "E2", "E3"]),
+        )
+        result = run_single_agent_with_trace("REQ-1007", client=client)
+        view = build_procurement_view(result)
+
+        assert view.vendor_security is not None
+        assert view.vendor_security.overall_status == "conflicting"
+        assert view.vendor_security.registry_status is not None
+        assert view.vendor_security.live_status is not None
+        assert "manual" in view.vendor_security.action_text.lower()
+
+    def test_unavailable_vendor_service_renders_as_unavailable(self, monkeypatch):
+        from src.tools import vendor_risk as vendor_risk_tool
+
+        def raise_503(name, timeout_seconds=3.0):
+            response = requests.Response()
+            response.status_code = 503
+            raise requests.HTTPError(response=response)
+
+        monkeypatch.setattr(vendor_risk_tool.vendor_client, "get_vendor_risk", raise_503)
+        client = ScriptedGeminiClient(
+            turns=[tool_turn(tool_call("get_vendor_evidence", vendor_name="NimbusAI")), stop_turn()],
+            structured_result=_synthesis(evidence_refs=["E1"]),
+        )
+        result = run_single_agent_with_trace("REQ-1009", client=client)
+        view = build_procurement_view(result)
+
+        assert view.vendor_security is not None
+        assert view.vendor_security.overall_status == "unavailable"
+        assert view.vendor_security.live_status is None or view.vendor_security.live_status == "Unavailable"
+
+    def test_a_current_approved_vendor_renders_as_verified(self, monkeypatch):
+        from src.tools import vendor_risk as vendor_risk_tool
+
+        monkeypatch.setattr(
+            vendor_risk_tool.vendor_client,
+            "get_vendor_risk",
+            lambda name, timeout_seconds=3.0: {
+                "security_review_status": "approved",
+                "last_review_date": "2026-06-20",
+                "processes_personal_data": True,
+                "stores_data_outside_region": False,
+            },
+        )
+        client = ScriptedGeminiClient(
+            turns=[tool_turn(tool_call("get_vendor_evidence", vendor_name="SignFlow")), stop_turn()],
+            structured_result=_synthesis(evidence_refs=["E1", "E2"]),
+        )
+        result = run_single_agent_with_trace("REQ-1001", client=client)
+        view = build_procurement_view(result)
+
+        assert view.vendor_security is not None
+        assert view.vendor_security.overall_status == "verified"
+
+    def test_no_vendor_evidence_retrieved_means_no_panel(self):
+        client = ScriptedGeminiClient(
+            turns=[tool_turn(tool_call("get_employee_budget", employee_id="E004")), stop_turn()],
+            structured_result=_synthesis(evidence_refs=["E1"]),
+        )
+        result = run_single_agent_with_trace("REQ-1001", client=client)
+        view = build_procurement_view(result)
+
+        assert view.vendor_security is None
+
+
+class TestConstraintsSummary:
+    def test_includes_passing_and_flagged_checks_with_distinct_icons(self):
+        client = ScriptedGeminiClient(
+            turns=[tool_turn(tool_call("get_employee_budget", employee_id="E004")), stop_turn()],
+            structured_result=_synthesis(evidence_refs=["E1"]),
+        )
+        result = run_single_agent_with_trace("REQ-1006", client=client)
+        view = build_procurement_view(result)
+
+        assert view.constraints_summary
+        icons = {c.icon for c in view.constraints_summary}
+        assert icons  # at least one icon present
+        for constraint in view.constraints_summary:
+            assert constraint.icon in ("✓", "⚠")
+            assert constraint.text
+
+    def test_excludes_skipped_checks(self):
+        client = ScriptedGeminiClient(turns=[stop_turn()], structured_result=_synthesis(evidence_refs=[]))
+        result = run_single_agent_with_trace("REQ-1001", client=client)
+        view = build_procurement_view(result)
+
+        skipped_rule_ids = {c.rule_id for c in view.policy_checks if c.status_kind == "skipped"}
+        if skipped_rule_ids:
+            summary_texts = {c.text for c in view.constraints_summary}
+            policy_detail_by_rule = {c.rule_id: c.detail for c in view.policy_checks}
+            for rule_id in skipped_rule_ids:
+                assert policy_detail_by_rule[rule_id] not in summary_texts
+
+
+class TestDecisionTraceHasOnePolicyRuleStagePerCheck:
+    def test_audit_timeline_includes_a_stage_for_every_policy_check(self):
+        client = ScriptedGeminiClient(turns=[stop_turn()], structured_result=_synthesis(evidence_refs=[]))
+        result = run_single_agent_with_trace("REQ-1001", client=client)
+        view = build_procurement_view(result)
+
+        for check in view.policy_checks:
+            assert any(check.rule_id in stage.label for stage in view.audit_timeline), check.rule_id
+
+    def test_a_flagged_check_gets_a_flagged_stage_not_a_failed_one(self):
+        client = ScriptedGeminiClient(turns=[stop_turn()], structured_result=_synthesis(evidence_refs=[]))
+        result = run_single_agent_with_trace("REQ-1006", client=client)
+        view = build_procurement_view(result)
+
+        flagged_checks = [c for c in view.policy_checks if c.status_kind == "flagged"]
+        assert flagged_checks
+        for check in flagged_checks:
+            stage = next(s for s in view.audit_timeline if check.rule_id in s.label)
+            assert stage.status == "flagged"
+
+
+class TestLifecycleView:
+    def test_default_branch_when_nothing_is_missing_or_unavailable(self, monkeypatch):
+        from src.tools import vendor_risk as vendor_risk_tool
+
+        monkeypatch.setattr(
+            vendor_risk_tool.vendor_client,
+            "get_vendor_risk",
+            lambda name, timeout_seconds=3.0: {
+                "security_review_status": "approved",
+                "last_review_date": "2026-06-20",
+                "processes_personal_data": True,
+                "stores_data_outside_region": False,
+            },
+        )
+        client = ScriptedGeminiClient(
+            turns=[
+                tool_turn(tool_call("get_employee_budget", employee_id="E004"), tool_call("get_vendor_evidence", vendor_name="SignFlow")),
+                stop_turn(),
+            ],
+            structured_result=_synthesis(evidence_refs=["E1", "E2"]),
+        )
+        result = run_single_agent_with_trace("REQ-1001", client=client)
+        view = build_procurement_view(result)
+
+        assert view.lifecycle.branch == "default"
+        assert view.lifecycle.stages[0].state == "done"  # Received
+        current = [s for s in view.lifecycle.stages if s.state == "current"]
+        assert len(current) == 1
+        assert current[0].label == "Human review"
+
+    def test_missing_information_branch(self):
+        client = ScriptedGeminiClient(turns=[stop_turn()], structured_result=_synthesis(evidence_refs=[]))
+        result = run_single_agent_with_trace("REQ-1006", client=client)
+        view = build_procurement_view(result)
+
+        assert view.lifecycle.branch == "missing_information"
+        assert [s.label for s in view.lifecycle.stages] == ["Received", "Missing information", "Requester action required"]
+        assert view.lifecycle.stages[1].state == "current"
+        assert view.lifecycle.stages[2].state == "pending"
+
+    def test_evidence_unavailable_branch_takes_priority_over_missing_information(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        result = run_single_agent_with_trace("REQ-1006")  # also has missing fields, but Gemini is unavailable too
+        view = build_procurement_view(result)
+
+        assert view.lifecycle.branch == "evidence_unavailable"
+        assert view.lifecycle.stages[1].state == "current"
+        assert view.lifecycle.stages[1].label == "Evidence unavailable"
 
 
 class TestMalformedOrEmptyResultDoesNotCrash:

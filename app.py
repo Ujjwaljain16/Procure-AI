@@ -16,7 +16,8 @@ import streamlit as st
 
 from src.agent.single_agent import run_single_agent_with_trace
 from src.agent.staged_agent import run_staged_agent_with_trace
-from src.ui.view_model import ProcurementView, build_procurement_view
+from src.agent.timeout_guard import MAX_ANALYSIS_SECONDS, run_with_timeout
+from src.ui.view_model import ProcurementView, build_procurement_view, classify_failure_reason
 
 ROOT = Path(__file__).resolve().parent
 REQUESTS = json.loads((ROOT / "data" / "requests.json").read_text(encoding="utf-8"))
@@ -81,10 +82,15 @@ if run_clicked:
     )
     with st.spinner(spinner_text):
         try:
-            result = runner(request_id)
+            result = run_with_timeout(lambda: runner(request_id))
             st.session_state.results[cache_key] = build_procurement_view(result)
         except KeyError as exc:
             st.session_state.results[cache_key] = {"kind": "invalid_request", "message": str(exc)}
+        except TimeoutError:
+            st.session_state.results[cache_key] = {
+                "kind": "timeout",
+                "message": f"Analysis did not complete within {MAX_ANALYSIS_SECONDS:.0f}s.",
+            }
         except Exception as exc:  # last-resort UI guard: never show a blank page
             st.session_state.results[cache_key] = {
                 "kind": "unexpected_error",
@@ -101,6 +107,13 @@ if isinstance(result, ProcurementView):
 elif isinstance(result, dict):
     status_text = "Error"
 header_cols[2].metric("Analysis status", status_text)
+
+# -- Decision lifecycle stepper (Tier 1 item 1) ------------------------------
+if isinstance(result, ProcurementView):
+    lifecycle_icon = {"done": "✅", "current": "🔵", "pending": "⬜"}
+    st.caption(
+        "  →  ".join(f"{lifecycle_icon.get(s.state, '•')} {s.label.upper()}" for s in result.lifecycle.stages)
+    )
 
 st.divider()
 
@@ -156,14 +169,20 @@ with right:
 
     elif isinstance(result, dict) and result.get("kind") == "invalid_request":
         st.subheader("Copilot recommendation")
-        st.error(f"Invalid request. Reason: {result['message']}. No procurement action was taken.")
+        st.error(f"{classify_failure_reason('REQUEST_INVALID')[1]} No procurement action was taken.")
+        st.caption(f"Technical detail: {result['message']}")
+
+    elif isinstance(result, dict) and result.get("kind") == "timeout":
+        st.subheader("Copilot recommendation")
+        st.error(f"{classify_failure_reason('ANALYSIS_TIMEOUT')[1]} No procurement action was taken. Next step: manual review.")
+        st.caption(f"Technical detail: {result['message']}")
 
     elif isinstance(result, dict) and result.get("kind") == "unexpected_error":
         st.subheader("Copilot recommendation")
         st.error(
-            f"Something went wrong while analyzing this request. Reason: {result['message']}. "
-            "No procurement action was taken. Next step: manual review."
+            f"{classify_failure_reason('MODEL_UNAVAILABLE')[1]} No procurement action was taken. Next step: manual review."
         )
+        st.caption(f"Technical detail: {result['message']}")
 
     elif isinstance(result, ProcurementView):
         view: ProcurementView = result
@@ -176,6 +195,10 @@ with right:
         if view.rationale:
             with st.expander("Why?", expanded=True):
                 st.write(view.rationale)
+                if view.constraints_summary:
+                    st.markdown("**Policy constraints**")
+                    for constraint in view.constraints_summary:
+                        st.markdown(f"{constraint.icon} {constraint.text}")
         st.markdown(f"**Next step:** {view.next_step}")
 
         approvals_col, flags_col = st.columns(2)
@@ -208,6 +231,26 @@ with right:
 if isinstance(result, ProcurementView):
     view = result
     st.divider()
+
+    # -- Vendor security panel (Tier 1 item 4) -------------------------------
+    if view.vendor_security is not None:
+        vs = view.vendor_security
+        status_color = {"verified": "green", "conflicting": "orange", "unavailable": "red", "missing": "orange", "not_applicable": "gray"}
+        st.subheader("Vendor security")
+        with st.container(border=True):
+            st.markdown(f"**{vs.vendor_name}**  —  :{status_color.get(vs.overall_status, 'gray')}[{vs.overall_icon} {vs.overall_label.upper()}]")
+            vs_cols = st.columns(2)
+            with vs_cols[0]:
+                st.markdown("**Registry**")
+                st.markdown(vs.registry_status or "_No registry record_")
+                if vs.registry_reviewed_date:
+                    st.caption(f"Reviewed: {vs.registry_reviewed_date}")
+            with vs_cols[1]:
+                st.markdown("**Vendor risk service**")
+                st.markdown(vs.live_status or "_No live record_")
+                if vs.live_verified_date:
+                    st.caption(f"Last verified: {vs.live_verified_date}")
+            st.markdown(f"**Action:** {vs.action_text}")
 
     ev_col, policy_col = st.columns([1.2, 1], gap="large")
 
@@ -270,9 +313,10 @@ if isinstance(result, ProcurementView):
         else:
             st.caption("No tools were called.")
 
-        st.markdown("**Audit timeline**")
-        stage_icon = {"done": "✅", "skipped": "⬜", "failed": "❌"}
-        st.markdown(" → ".join(f"{stage_icon.get(s.status, '•')} {s.label}" for s in view.audit_timeline))
+        st.markdown("**Decision trace**")
+        stage_icon = {"done": "✅", "skipped": "⬜", "failed": "❌", "flagged": "🔶"}
+        for index, stage in enumerate(view.audit_timeline, start=1):
+            st.markdown(f"{index:02d}. {stage_icon.get(stage.status, '•')} {stage.label}")
 
 st.divider()
 st.caption("Important: recommendations are advisory. Human approval remains required for purchasing decisions.")
