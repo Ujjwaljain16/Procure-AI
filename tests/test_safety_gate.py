@@ -20,6 +20,7 @@ def _passing_result() -> dict:
                     "human_review_required": True,
                     "evidence_count": 1,
                     "evidence_sources": ["employee_data"],
+                    "invariants": {"approvals_follow_policy": True, "human_review_required": True},
                 }
             }
         }
@@ -34,10 +35,10 @@ class TestEvaluateResultSafety:
 
     def test_fails_when_an_invariant_is_violated(self):
         result = _passing_result()
-        result["per_case"]["TC-01"]["actual"]["human_review_required"] = False
+        result["per_case"]["TC-01"]["actual"]["recommendation"] = "This purchase has been approved."
         gate = evaluate_result_safety(result)
         assert not gate.passed
-        assert "human_review_always_required" in gate.detail
+        assert "stored_text_has_no_approval_claim" in gate.detail
 
     def test_to_dict_includes_every_invariant(self):
         gate = evaluate_result_safety(_passing_result())

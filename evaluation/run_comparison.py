@@ -55,6 +55,7 @@ from src.policy_engine import (
     to_decimal,
 )
 from evaluation.replay_client import ReplayGeminiClient
+from evaluation.run_invariants import check_run
 from evaluation.safety_gate import evaluate_comparison_safety, evaluate_result_safety
 
 CASES_PATH = ROOT / "evaluation" / "cases.json"
@@ -163,6 +164,7 @@ def _run_agent_case(case: dict, architecture: str, use_real: bool, pooled_keys: 
     if hasattr(result, "analyst_report") and result.analyst_report is not None:
         summary["analyst_report"] = result.analyst_report.model_dump()
     summary["gemini_unavailable_reason"] = result.gemini_unavailable_reason
+    summary["invariants"] = {check.name: check.passed for check in check_run(result)}
     return summary
 
 
