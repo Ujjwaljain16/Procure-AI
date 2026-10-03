@@ -17,6 +17,7 @@ import streamlit as st
 from src.agent.single_agent import run_single_agent_with_trace
 from src.agent.staged_agent import run_staged_agent_with_trace
 from src.agent.timeout_guard import MAX_ANALYSIS_SECONDS, run_with_timeout
+from src.data_access import MalformedRequestError
 from src.ui.view_model import ProcurementView, build_procurement_view, classify_failure_reason
 
 ROOT = Path(__file__).resolve().parent
@@ -84,7 +85,7 @@ if run_clicked:
         try:
             result = run_with_timeout(lambda: runner(request_id))
             st.session_state.results[cache_key] = build_procurement_view(result)
-        except KeyError as exc:
+        except (KeyError, MalformedRequestError) as exc:
             st.session_state.results[cache_key] = {"kind": "invalid_request", "message": str(exc)}
         except TimeoutError:
             st.session_state.results[cache_key] = {

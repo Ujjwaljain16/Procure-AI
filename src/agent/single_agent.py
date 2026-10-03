@@ -78,7 +78,7 @@ def run_single_agent_with_trace(request_id: str, client: Optional[GeminiClientPr
     alongside the ``ProcurementDecision``.
     """
     start = time.monotonic()
-    raw = data_access.get_request(request_id)  # KeyError propagates for an unknown request_id, by design
+    raw = data_access.get_request_validated(request_id)  # KeyError / MalformedRequestError propagate before any LLM call, by design
 
     registry = ToolRegistry()
     llm_calls = 0

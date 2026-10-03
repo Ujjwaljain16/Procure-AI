@@ -72,7 +72,7 @@ def run_staged_agent(request_id: str, client: Optional[StagedGeminiClient] = Non
 
 def run_staged_agent_with_trace(request_id: str, client: Optional[StagedGeminiClient] = None) -> StagedAgentRunResult:
     start = time.monotonic()
-    raw = data_access.get_request(request_id)  # KeyError propagates for an unknown request_id, by design
+    raw = data_access.get_request_validated(request_id)  # KeyError / MalformedRequestError propagate before any LLM call, by design
 
     registry = ToolRegistry()
     analyst_llm_calls = 0
