@@ -4,6 +4,22 @@ An internal procurement decision-support tool: an employee submits a software or
 
 > **Status of the evidence.** The deterministic authority boundary and policy behaviour are extensively tested offline. A real-model sample of eight cases was run once against both architectures; it is descriptive, not statistically significant. That live run is the final empirical validation step we ran, and its limits are stated below.
 
+## Navigation
+
+```
+CURRENT SUBMISSION
+  ├── Architecture ............... docs/architecture.md  (and "Architecture" below)
+  ├── Current evaluation ......... docs/final_evaluation.md  (and "Evaluation" below)
+  ├── Architecture comparison .... "Results" and "Architecture Decision" below
+  └── Final ship decision ........ docs/architecture_decision.md
+
+HISTORICAL / DEVELOPMENT
+  ├── Results index .............. evaluation/results/INDEX.md (replay) and evaluation/correctness/results/INDEX.md (correctness, live)
+  ├── Archived results ........... evaluation/results/archive/ and evaluation/correctness/results/archive/
+  ├── Pre-hardening documents .... docs/architecture_comparison.md, docs/architecture_a_baseline.md
+  └── Development notes .......... docs/starter_pack_audit.md
+```
+
 ## Problem
 
 Employees request new software. Procurement has to check existing tools, team budget, vendor status, security and privacy requirements, and approval rules before anything is bought. Doing that by hand is slow and inconsistent. Letting an AI decide unilaterally is unsafe. This product does the evidence-gathering and interpretation with AI, enforces every hard rule in code, and keeps every approval and exception with a human.
