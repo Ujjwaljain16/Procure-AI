@@ -13,6 +13,7 @@ from __future__ import annotations
 
 _FAILURE_CATEGORY_MESSAGES = {
     "MODEL_UNAVAILABLE": "Automated analysis is temporarily unavailable.",
+    "MODEL_OUTPUT_INVALID": "Automated analysis returned a response that could not be used.",
     "TOOL_UNAVAILABLE": "A required data source is temporarily unavailable.",
     "REQUEST_INVALID": "This request could not be processed.",
     "POLICY_EVALUATION_FAILED": "Policy evaluation could not be completed.",
@@ -21,6 +22,8 @@ _FAILURE_CATEGORY_MESSAGES = {
 
 _KNOWN_FAILURE_REASONS = {
     "GeminiConfigurationError": "MODEL_UNAVAILABLE",
+    "EMPTY_RESPONSE": "MODEL_OUTPUT_INVALID",
+    "PARSE_FAILED": "MODEL_OUTPUT_INVALID",
     # Identity entries so a caller that already knows the category can go
     # through the same function and get the same vetted message, instead of
     # a second hardcoded copy of the text.

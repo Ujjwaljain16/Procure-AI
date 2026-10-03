@@ -53,9 +53,11 @@ class ScriptedGeminiClient:
     def generate_turn(self, contents, tool_specs, system_instruction) -> ModelTurn:
         if self._raise_on_turn_index is not None and self.turn_calls == self._raise_on_turn_index:
             self.turn_calls += 1
-            raise RuntimeError("simulated Gemini failure during a tool-gathering turn")
+            raise ConnectionError("simulated Gemini transport failure during a tool-gathering turn")
         self.turn_call_log.append((len(contents), [spec.name for spec in tool_specs], system_instruction))
-        turn = self._turns[self.turn_calls]
+        # A real model keeps answering after its scripted turns run out; a
+        # text-only stop turn is the faithful default.
+        turn = self._turns[self.turn_calls] if self.turn_calls < len(self._turns) else stop_turn()
         self.turn_calls += 1
         return turn
 

@@ -18,17 +18,56 @@ requested tool actually runs.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Optional, Protocol, Sequence
 
 from src.agent.schemas import AgentSynthesis
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_MODEL = "gemini-2.5-flash"
 
 
 class GeminiConfigurationError(Exception):
     """Raised when the Gemini client cannot be configured, e.g. a missing API key."""
+
+
+class ModelOutputError(Exception):
+    """The model answered, but the answer could not be used as the requested
+    structure. ``reason`` is a stable code (EMPTY_RESPONSE, PARSE_FAILED) that
+    the orchestrators record and show, instead of silently producing no output.
+    """
+
+    def __init__(self, reason: str, detail: str = ""):
+        super().__init__(f"{reason}: {detail}" if detail else reason)
+        self.reason = reason
+
+
+_TRANSPORT_EXCEPTION_NAMES = frozenset(
+    {"ClientError", "ServerError", "APIError", "HTTPError", "RequestException", "Timeout", "ConnectionError", "ReadTimeout", "ConnectTimeout"}
+)
+DEFAULT_HTTP_TIMEOUT_SECONDS = 30.0
+
+
+def classify_model_exception(exc: BaseException) -> Optional[str]:
+    """Returns the user-facing reason for an exception raised by a model
+    call, or ``None`` when the exception is a programming error that must not
+    be swallowed. Transport and service errors (the SDK's own error classes,
+    network timeouts, HTTP errors) and output errors are recognized;
+    everything else -- an AttributeError from a changed response shape, a
+    TypeError from a bad argument -- is re-raised so it surfaces as a bug.
+    """
+    if isinstance(exc, ModelOutputError):
+        return exc.reason
+    name = type(exc).__name__
+    module = type(exc).__module__ or ""
+    if module.startswith("google") or name in _TRANSPORT_EXCEPTION_NAMES:
+        return name
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return name
+    return None
 
 
 @dataclass(frozen=True)
@@ -54,7 +93,7 @@ class GeminiClientProtocol(Protocol):
 
     def generate_turn(self, contents: list, tool_specs: Sequence, system_instruction: str) -> ModelTurn: ...
 
-    def generate_structured(self, contents: list, system_instruction: str) -> Optional[AgentSynthesis]: ...
+    def generate_structured(self, contents: list, system_instruction: str) -> AgentSynthesis: ...
 
     def build_function_response_content(self, call: ToolCall, result: dict) -> Any: ...
 
@@ -66,11 +105,12 @@ class GeminiClient:
     unless a real client is actually constructed.
     """
 
-    def __init__(self, api_key: str, model: str) -> None:
+    def __init__(self, api_key: str, model: str, http_timeout_seconds: Optional[float] = None) -> None:
         from google import genai  # deferred import -- see class docstring
 
+        timeout_s = http_timeout_seconds or float(os.environ.get("GEMINI_HTTP_TIMEOUT_SECONDS", DEFAULT_HTTP_TIMEOUT_SECONDS))
         self._genai = genai
-        self._client = genai.Client(api_key=api_key)
+        self._client = genai.Client(api_key=api_key, http_options={"timeout": int(timeout_s * 1000)})
         self._model = model
 
     def generate_turn(self, contents: list, tool_specs: Sequence, system_instruction: str) -> ModelTurn:
@@ -87,7 +127,7 @@ class GeminiClient:
         response = self._client.models.generate_content(model=self._model, contents=contents, config=config)
         return self._to_model_turn(response)
 
-    def generate_structured(self, contents: list, system_instruction: str) -> Optional[AgentSynthesis]:
+    def generate_structured(self, contents: list, system_instruction: str) -> AgentSynthesis:
         from google.genai import types
 
         config = types.GenerateContentConfig(
@@ -101,11 +141,13 @@ class GeminiClient:
             return parsed
         text = getattr(response, "text", None)
         if not text:
-            return None
+            logger.warning("gemini structured call returned an empty response")
+            raise ModelOutputError("EMPTY_RESPONSE")
         try:
             return AgentSynthesis.model_validate_json(text)
-        except Exception:
-            return None
+        except Exception as exc:
+            logger.warning("gemini structured output did not parse (response length %d)", len(text))
+            raise ModelOutputError("PARSE_FAILED", type(exc).__name__) from exc
 
     def build_function_response_content(self, call: ToolCall, result: dict) -> Any:
         from google.genai import types

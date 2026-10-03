@@ -6,7 +6,7 @@ a real Gemini API call or requires GEMINI_API_KEY.
 from __future__ import annotations
 
 from src.agent.schemas import AgentSynthesis
-from src.agent.single_agent import run_single_agent
+from src.agent.single_agent import run_single_agent, run_single_agent_with_trace
 from src.policy_engine import VendorRiskAvailability
 from tests.agent_fakes import ScriptedGeminiClient, stop_turn, tool_call, tool_turn
 
@@ -74,7 +74,8 @@ class TestFinalStructuredAnswer:
             ),
         )
         decision = run_single_agent("REQ-1001", client=client)
-        assert decision.recommendation == "Use the existing catalog entry."
+        assert decision.recommendation.startswith("Use the existing catalog entry.")
+        assert "cited no verifiable evidence" in decision.recommendation
         assert decision.next_step == "No new purchase needed."
 
 
@@ -238,10 +239,13 @@ class TestUnsupportedTool:
 
 class TestMalformedModelOutput:
     def test_generate_structured_raising_is_handled_gracefully(self):
-        client = ScriptedGeminiClient(turns=[stop_turn()], structured_result=ValueError("malformed JSON"))
-        decision = run_single_agent("REQ-1001", client=client)
-        assert decision.human_review_required is True
-        assert "unavailable" in decision.recommendation.lower()
+        from src.agent.gemini_adapter import ModelOutputError
+
+        client = ScriptedGeminiClient(turns=[stop_turn()], structured_result=ModelOutputError("PARSE_FAILED"))
+        result = run_single_agent_with_trace("REQ-1001", client=client)
+        assert result.decision.human_review_required is True
+        assert "could not be used" in result.decision.recommendation.lower()
+        assert result.gemini_unavailable_reason == "PARSE_FAILED"
 
 
 class TestModelOrApiException:

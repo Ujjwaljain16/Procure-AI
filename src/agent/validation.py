@@ -96,6 +96,11 @@ def build_procurement_decision(
 
         recommendation = (synthesis.recommendation or "").strip() or FALLBACK_RECOMMENDATION
         next_step = (synthesis.next_step or "").strip() or FALLBACK_NEXT_STEP
+        if not cited_ids:
+            # The evidence list is what was retrieved, not what the model
+            # relied on. Say so, rather than presenting it as the model's
+            # cited support.
+            recommendation = f"{recommendation} (Note: the model cited no verifiable evidence; the retrieved evidence is listed for review.)"
         if rejected_ids:
             recommendation = (
                 f"{recommendation} (Note: {len(rejected_ids)} cited evidence reference(s) "

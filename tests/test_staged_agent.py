@@ -6,6 +6,8 @@ none makes a real Gemini API call or requires GEMINI_API_KEY.
 
 from __future__ import annotations
 
+from src.agent.gemini_adapter import ModelOutputError
+
 import requests
 
 from src.agent.staged_agent import run_staged_agent_with_trace
@@ -88,7 +90,7 @@ class TestAnalystMalformedOutput:
     def test_analyst_report_exception_degrades_gracefully(self):
         client = ScriptedStagedGeminiClient(
             turns=[stop_turn()],
-            analyst_report=ValueError("malformed analyst output"),
+            analyst_report=ModelOutputError("PARSE_FAILED"),
             structured_result=_synthesis(),
         )
         result = run_staged_agent_with_trace("REQ-1001", client=client)
@@ -163,10 +165,12 @@ class TestReviewerMalformedOutput:
 
     def test_reviewer_exception_degrades_gracefully(self):
         client = ScriptedStagedGeminiClient(
-            turns=[stop_turn()], analyst_report=_analyst_report(), structured_result=RuntimeError("reviewer failed")
+            turns=[stop_turn()], analyst_report=_analyst_report(), structured_result=ConnectionError("reviewer failed")
         )
         result = run_staged_agent_with_trace("REQ-1001", client=client)
         assert result.gemini_unavailable_reason is not None
+        assert result.reviewer_status == "FAILED"
+        assert result.analyst_report is not None  # the analyst's work is kept
         assert result.decision.human_review_required is True
 
 

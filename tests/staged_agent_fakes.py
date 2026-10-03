@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Optional, Union
 
+from tests.agent_fakes import stop_turn
 from src.agent.gemini_adapter import ModelTurn, ToolCall
 from src.agent.schemas import AgentSynthesis
 from src.agent.staged_schemas import AnalystReport
@@ -33,8 +34,8 @@ class ScriptedStagedGeminiClient:
     def generate_turn(self, contents, tool_specs, system_instruction) -> ModelTurn:
         if self._raise_on_turn_index is not None and self.turn_calls == self._raise_on_turn_index:
             self.turn_calls += 1
-            raise RuntimeError("simulated Gemini failure during analyst tool turn")
-        turn = self._turns[self.turn_calls]
+            raise ConnectionError("simulated Gemini transport failure during analyst tool turn")
+        turn = self._turns[self.turn_calls] if self.turn_calls < len(self._turns) else stop_turn()
         self.turn_calls += 1
         return turn
 

@@ -15,12 +15,12 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from src.agent.gemini_adapter import DEFAULT_MODEL, GeminiClient, GeminiConfigurationError
+from src.agent.gemini_adapter import DEFAULT_MODEL, GeminiClient, GeminiConfigurationError, ModelOutputError
 from src.agent.staged_schemas import AnalystReport
 
 
 class StagedGeminiClient(GeminiClient):
-    def generate_analyst_report(self, contents: list, system_instruction: str) -> Optional[AnalystReport]:
+    def generate_analyst_report(self, contents: list, system_instruction: str) -> AnalystReport:
         from google.genai import types
 
         config = types.GenerateContentConfig(
@@ -34,11 +34,11 @@ class StagedGeminiClient(GeminiClient):
             return parsed
         text = getattr(response, "text", None)
         if not text:
-            return None
+            raise ModelOutputError("EMPTY_RESPONSE")
         try:
             return AnalystReport.model_validate_json(text)
-        except Exception:
-            return None
+        except Exception as exc:
+            raise ModelOutputError("PARSE_FAILED", type(exc).__name__) from exc
 
 
 def create_staged_gemini_client():

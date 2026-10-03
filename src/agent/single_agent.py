@@ -11,18 +11,24 @@ remains deterministic and authoritative and is never exposed to the model as
 a callable tool -- its result is handed to the model only as trusted context
 for the final synthesis call, and the model's synthesis can never change it
 (enforced in ``src/agent/validation.py``, not merely requested in the prompt).
+
+Every model call is classified: a transport or output failure degrades to a
+conservative human-review decision with its reason recorded; a programming
+error is re-raised so it surfaces as a bug instead of being hidden.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional
 
 from src import data_access
 from src.agent import prompts
-from src.agent.gemini_adapter import GeminiClientProtocol, GeminiConfigurationError, create_gemini_client
+from src.agent.loop_utils import canonical_arguments, is_cancelled
+from src.agent.gemini_adapter import GeminiClientProtocol, GeminiConfigurationError, classify_model_exception, create_gemini_client
 from src.agent.schemas import AgentSynthesis
 from src.agent.tools_registry import TOOL_SPECS, ToolRegistry
 from src.agent.validation import build_procurement_decision
@@ -54,31 +60,38 @@ class AgentRunResult:
     gemini_unavailable_reason: Optional[str]
 
 
-def run_single_agent(request_id: str, client: Optional[GeminiClientProtocol] = None) -> ProcurementDecision:
+def run_single_agent(
+    request_id: str,
+    client: Optional[GeminiClientProtocol] = None,
+    cancel_event: Optional[threading.Event] = None,
+) -> ProcurementDecision:
     """Execute Architecture A for one request and return just the external
     ``ProcurementDecision`` contract. See ``run_single_agent_with_trace`` for
     the fuller result a UI needs.
 
-    ``client`` is injectable for tests; production code (src/solution.py)
-    always calls this with no client, which constructs the real Gemini-backed
-    one from environment configuration.
+    ``client`` is injectable for tests; production code always calls this with
+    no client, which constructs the real Gemini-backed one from environment
+    configuration. ``cancel_event`` lets a deadline stop the run at the next
+    turn boundary instead of letting it keep spending quota.
 
-    An unknown ``request_id`` raises (``KeyError`` from ``data_access``) --
-    no ProcurementDecision is fabricated for a request that does not exist.
-    Any failure of the Gemini call itself, at any point, degrades to a
-    conservative human-review ``ProcurementDecision`` rather than raising or
-    fabricating a confident answer.
+    An unknown or malformed ``request_id`` raises before any model call -- no
+    ProcurementDecision is fabricated for a request that does not exist. A
+    model or transport failure degrades to a conservative human-review decision.
     """
-    return run_single_agent_with_trace(request_id, client).decision
+    return run_single_agent_with_trace(request_id, client, cancel_event).decision
 
 
-def run_single_agent_with_trace(request_id: str, client: Optional[GeminiClientProtocol] = None) -> AgentRunResult:
+def run_single_agent_with_trace(
+    request_id: str,
+    client: Optional[GeminiClientProtocol] = None,
+    cancel_event: Optional[threading.Event] = None,
+) -> AgentRunResult:
     """Same execution as ``run_single_agent``, returning the full internal
     trace (policy evaluation, raw request, tool registry, model rationale)
     alongside the ``ProcurementDecision``.
     """
     start = time.monotonic()
-    raw = data_access.get_request_validated(request_id)  # KeyError / MalformedRequestError propagate before any LLM call, by design
+    raw = data_access.get_request_validated(request_id)  # KeyError / MalformedRequestError propagate before any LLM call
 
     registry = ToolRegistry()
     llm_calls = 0
@@ -94,36 +107,48 @@ def run_single_agent_with_trace(request_id: str, client: Optional[GeminiClientPr
 
     contents: list = [prompts.build_initial_user_message(raw)]
     seen_calls: set = set()
+    nudged = False
 
     if active_client is not None and gemini_unavailable_reason is None:
         for _ in range(MAX_TOOL_TURNS):
+            if is_cancelled(cancel_event):
+                gemini_unavailable_reason = "ANALYSIS_TIMEOUT"
+                break
             llm_calls += 1  # counts every attempt, including one that fails below -- an API call was made either way
             try:
                 turn = active_client.generate_turn(contents, list(TOOL_SPECS.values()), prompts.SYSTEM_PROMPT)
-            except Exception as exc:  # the SDK's own exception hierarchy is not something this module depends on
-                gemini_unavailable_reason = type(exc).__name__
-                logger.warning(
-                    "request=%s architecture=%s gemini_call_failed stage=tool_turn error=%s",
-                    request_id, ARCHITECTURE_NAME, exc,
-                )
+            except Exception as exc:
+                reason = classify_model_exception(exc)
+                if reason is None:
+                    raise
+                gemini_unavailable_reason = reason
+                logger.warning("request=%s architecture=%s gemini_call_failed stage=tool_turn reason=%s", request_id, ARCHITECTURE_NAME, reason)
                 break
 
             if not turn.function_calls:
+                if registry.call_count == 0 and not nudged:
+                    # The model answered in text without gathering evidence --
+                    # give it exactly one chance to call the tools before the
+                    # loop ends with zero evidence.
+                    nudged = True
+                    if turn.raw_content is not None:
+                        contents.append(turn.raw_content)
+                    contents.append(prompts.build_corrective_message())
+                    continue
                 break
 
             all_calls_redundant = True
             response_pairs = []
             for call in turn.function_calls:
-                call_key = (call.name, tuple(sorted(call.arguments.items())))
+                if is_cancelled(cancel_event):
+                    break
+                call_key = (call.name, canonical_arguments(call.arguments))
                 if call_key not in seen_calls:
                     all_calls_redundant = False
                 seen_calls.add(call_key)
 
                 record = registry.execute(call.name, call.arguments)
-                logger.info(
-                    "request=%s architecture=%s tool=%s success=%s",
-                    request_id, ARCHITECTURE_NAME, call.name, record.success,
-                )
+                logger.info("request=%s architecture=%s tool=%s success=%s", request_id, ARCHITECTURE_NAME, call.name, record.success)
                 response_pairs.append((call, record))
 
             if turn.raw_content is not None:
@@ -131,6 +156,9 @@ def run_single_agent_with_trace(request_id: str, client: Optional[GeminiClientPr
             for call, record in response_pairs:
                 contents.append(active_client.build_function_response_content(call, record.to_model_payload()))
 
+            if is_cancelled(cancel_event):
+                gemini_unavailable_reason = "ANALYSIS_TIMEOUT"
+                break
             if all_calls_redundant:
                 # the model asked for nothing new this turn -- stop feeding
                 # the loop rather than looping indefinitely on repeats.
@@ -148,22 +176,23 @@ def run_single_agent_with_trace(request_id: str, client: Optional[GeminiClientPr
     policy_evaluation = evaluate_policy(context)
 
     synthesis: Optional[AgentSynthesis] = None
-    if active_client is not None and gemini_unavailable_reason is None:
+    if active_client is not None and gemini_unavailable_reason is None and not is_cancelled(cancel_event):
         synthesis_contents = contents + [prompts.build_synthesis_message(registry.evidence_index(), policy_evaluation)]
         llm_calls += 1  # counts every attempt, including one that fails below
         try:
             synthesis = active_client.generate_structured(synthesis_contents, prompts.SYSTEM_PROMPT)
         except Exception as exc:
-            gemini_unavailable_reason = type(exc).__name__
-            logger.warning(
-                "request=%s architecture=%s gemini_call_failed stage=synthesis error=%s",
-                request_id, ARCHITECTURE_NAME, exc,
-            )
+            reason = classify_model_exception(exc)
+            if reason is None:
+                raise
+            gemini_unavailable_reason = reason
+            logger.warning("request=%s architecture=%s gemini_call_failed stage=synthesis reason=%s", request_id, ARCHITECTURE_NAME, reason)
 
     latency_ms = (time.monotonic() - start) * 1000
     telemetry = RunTelemetry(
         llm_calls=llm_calls,
         tool_calls=registry.call_count,
+        tool_calls_succeeded=sum(1 for record in registry.execution_log if record.success),
         tool_names=registry.tool_names,
         architecture=ARCHITECTURE_NAME,
         latency_ms=latency_ms,
