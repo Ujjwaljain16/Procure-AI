@@ -202,7 +202,7 @@ The evaluation has four layers. Each answers a different question, and no layer 
 | 1. Frozen replay | Did the redesign change behaviour that was already accepted? | 25 frozen cases, both architectures, deterministic stand-in model. Regression only | 25 of 25 expected checks for both. Zero deterministic-field differences between A and B |
 | 2. Independent correctness (offline) | Are the decisions correct, and do they hold under controlled failures? | 26 hand-derived cases × 4 modes (normal, hostile, malformed, outage) × 2 architectures, scored on 13 dimensions | No failing dimensions. Deterministic outputs identical to the normal run in 104 of 104 runs per architecture. 12 of 12 public checks |
 | 3. Real-model sample | Does the actual model behave acceptably, and does B earn its cost? | 16 pre-registered cases, both architectures, interleaved per case, `google/gemini-3.7-flash` through CloseRouter | See below |
-| 4. Tests | Does the code do what it claims? | `tests/` | 766 passed, 1 skipped, 8 expected failures |
+| 4. Tests | Does the code do what it claims? | `tests/` | 769 passed, 1 skipped, 8 expected failures |
 
 ### Layer 3 in detail
 
@@ -276,7 +276,7 @@ The brief's six edge cases, with the ground-truth cases that exercise each one (
 - **No durable decision or approval store.** Each analysis appends one minimal audit record to `runs/audit.jsonl` (git-ignored), but approvals and procurement decisions are not persisted in a database or workflow system.
 - **No authentication.** The UI and the vendor-risk mock bind to loopback by default. Binding elsewhere needs the explicit `PROCUREAI_ALLOW_EXTERNAL=1` opt-in, and then an authenticating reverse proxy must be placed in front.
 - **Provider availability and quota.** Live runs depend on a provider's route and quota. Provider failures are recorded as provider failures, not architecture failures.
-- **An intermittent test failure is unresolved.** One full run failed `test_failure_contract::test_missing_api_key_recommendation_is_clean`. An environment dependence was fixed and the root cause was not established. Later full runs passed.
+- **A historical intermittent test failure is not explained.** One full run failed `test_failure_contract::test_missing_api_key_recommendation_is_clean`. An environment dependence was fixed afterwards, and the root cause was not established. It did not reproduce in 20 isolated runs, and later full-suite runs passed.
 
 ## 10. Reproducibility
 
