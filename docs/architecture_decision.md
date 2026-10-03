@@ -1,31 +1,21 @@
-# Architecture Decision
+# Architecture decision
 
-## Decision
+**Decision (recommended):** Ship Architecture A as the default. Keep Architecture B in the codebase as an evaluated alternative, selectable but not the default.
 
-**Ship Architecture A (single agent).** It matched Architecture B on every deterministic and safety check we can measure, uses fewer model calls, and is simpler to operate and test. We did not measure a quality difference between the two, so this decision does not claim one.
+**Why this decision rests on the evidence**
 
-## Evidence
+Both architectures now share one authoritative path: a validated request, the deterministic evidence preflight, the deterministic policy engine, the validator, and human handoff. The model cannot choose the evidence the policy uses. The architectures differ only in orchestration: A is one agent; B is an analyst followed by a reviewer.
 
-**Frozen replay set (25 cases, deterministic stand-in model).** Both architectures pass all expected checks (25/25), agree on every deterministic field (0 mismatches), and pass every recorded per-run invariant. Caveat: both use the same policy engine and the same stand-in model, so agreement on policy fields is expected by construction. This shows the wiring is correct, not that either architecture reasons well.
+So the question is whether B's extra orchestration produces a measurable benefit that justifies its cost.
 
-**Real-model sample (6 cases, one run each, gemini-2.5-flash, temperature 0).**
-- B was slower in 5 of 6 cases (exact two-sided sign test, p ≈ 0.22). That is not statistically established at this sample size.
-- Median latency: A 12.4 s (95% bootstrap CI 10.1–14.6); B 20.8 s (CI 13.2–27.0). The intervals overlap heavily. The earlier relative-latency headline is not supported by this sample.
-- Each architecture had one transient 503 during a model call. Both degraded to a human-review decision with the reason recorded. B's failure was not evidence of weaker reasoning.
+- **Correctness, offline (26 cases, four fault modes).** Both architectures pass every scored dimension, and their deterministic outputs are identical across normal, hostile, malformed, and outage runs (104 of 104 runs for each architecture). Offline evaluation can't separate them on correctness, because the policy path is shared.
+- **Correctness, live (8 cases, one run).** On the 10 cells that completed, both architectures matched the hand-authored recommendation class and kept every policy field identical to the normal run. No quality advantage for B appears.
+- **Cost, live.** On the completed cells, B made about twice the logical LLM calls of A (about 5 against 2) and roughly three times the median latency (about 30 s against 9 s). B also issued four supplemental tool lookups where A issued none in most cases, which the offline contract did not predict.
 
-**Quality.** Not measured. B's analyst raised one useful clarification (whether a NeuralDesk request was a new product or a variant of an existing one). We observed it once and do not treat it as a measured advantage.
+**What this does not show.** The live sample has eight cases and one run. Six cells failed on provider quota (HTTP 429) for both architectures; that reflects the provider stopping service, not either architecture. No statistical significance is claimed, and a single run cannot rule out a quality difference that a larger sample would reveal.
 
-## Trade-off
+**Why A is the default.** B adds two model stages, more calls, more latency, and more tool traffic, and in this evidence it buys no measurable quality. A reaches the same policy-compliant outcomes with fewer moving parts, so it is the simpler system to operate and to audit. A is also the path whose deterministic guarantees are tested most directly.
 
-B adds a reasoning stage, roughly one more model call per request, and a second failure point. Nothing we measured offsets that cost. The assignment asks for a simpler system when it performs as well, and on measured behavior A does.
+**Conditions to revisit.** Re-evaluate B if a larger live sample shows a repeatable quality gain on recommendation or evidence grounding, or if a future policy needs a reviewer stage that a single agent cannot provide cleanly. Until then, B stays as an evaluated alternative rather than a shipped default.
 
-## What would change this decision
-
-Ship B only if a blinded, two-rater study on a sealed holdout of at least 30 cases shows B improving recommendation or missing-information quality, with a 95% interval above zero and reported inter-rater agreement. A failure-mode analysis showing a class of cases that A systematically misses would also justify revisiting.
-
-## Limitations
-
-- The real sample has six cases and one run each. It supports the safety and cost observations, not a quality verdict.
-- Replay results cannot judge recommendation text, since the stand-in writes fixed text.
-- The policy engine determines most deterministic outcomes, so agreement between architectures is largely structural.
-- One model family and one prompt version were tested.
+**Limits to state with the result.** Prompt-injection visibility is a deterministic, pattern-based signal, and it is not a complete defense; paraphrased attacks may evade it. Recommendation text is not scored by the offline evaluation. Live results are descriptive.

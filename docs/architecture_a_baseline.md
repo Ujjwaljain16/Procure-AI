@@ -1,3 +1,5 @@
+> **Historical document.** This describes the pre-hardening system, in which the model chose the evidence-gathering calls. It is kept for audit. The current architecture and evidence are in `docs/architecture.md` and `docs/final_evaluation.md`.
+
 # Architecture A Baseline (frozen before Architecture B implementation)
 
 Recorded before any Architecture B code was written. Architecture A must not

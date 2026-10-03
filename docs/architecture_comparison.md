@@ -1,3 +1,5 @@
+> **Historical document.** This describes the pre-hardening system, in which the model chose the evidence-gathering calls. It is kept for audit. The current architecture and evidence are in `docs/architecture.md` and `docs/final_evaluation.md`.
+
 # Architecture Comparison — Single-Agent (A) vs. Staged/Two-Agent (B)
 
 Real results from `python evaluation/run_comparison.py`: the full 25-case set run twice in replay mode for reproducibility (`comparison_20260930T090153Z.json`, `comparison_20260930T090239Z.json` — identical both times), plus a 6-case representative sample run against the real Gemini API (`comparison_20260930T091330Z.json`, see §Real Gemini Results). **This is not the final ship decision** — Phase 6 gathers evidence only; the decision memo is written in Phase 7.

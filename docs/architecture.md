@@ -1,49 +1,61 @@
 # Architecture
 
-## Final shipped architecture (Architecture A — single agent)
+## The boundary
+
+The product is built around one rule: **the model never chooses the evidence the policy uses.** Every fact that feeds a policy decision is gathered by deterministic code from the validated request, before any model turn. A model failure, a hostile model, or a malformed model cannot change the policy fields.
 
 ```mermaid
 flowchart TD
-    U[User] --> SA["Single Procurement Agent<br/>src/agent/single_agent.py"]
-    SA --> T["Tools<br/>src/tools/*.py, via tools_registry.py's allowlist"]
-    T --> EP["Evidence Pack<br/>EvidenceItem[], src/contracts.py"]
-    EP --> PE["Deterministic Policy Engine<br/>src/policy_engine.py — evaluate_policy()"]
-    PE --> FV["Final Validator<br/>src/agent/validation.py — build_procurement_decision()"]
-    FV --> PD["ProcurementDecision<br/>src/contracts.py — external output contract"]
-    PD --> HR[Human Review / Approval]
+    R[Request] --> V[Validation<br/>structural gate, no business rules]
+    V --> P[Deterministic evidence preflight<br/>employee/budget, catalog, purchase history, vendor registry + risk]
+    P --> E[(Authoritative evidence pack)]
+    E --> POL[Deterministic policy engine<br/>POL-1..POL-11]
+    POL --> PF[Policy fields<br/>approvals, flags, missing information, human review]
+    E --> AG{AI orchestration}
+    AG -->|Architecture A| A[Single agent]
+    AG -->|Architecture B| B[Analyst] --> RV[Reviewer]
+    A --> VAL[Final validator]
+    RV --> VAL
+    PF --> VAL
+    VAL --> D[ProcurementDecision]
+    D --> H[Human handoff<br/>approval always pending]
+    INJ[Deterministic injection visibility<br/>adds one flag only] --> VAL
 ```
 
-See `docs/architecture_decision.md` for why this is the shipped choice.
+## What each part guarantees
 
-## Architecture B (built and evaluated, not shipped)
+- **Validation** rejects only structurally broken records (missing identifiers, non-numeric or non-finite cost). Negative cost is missing information, not a rejection. No business rule lives here.
+- **Evidence preflight** (`src/evidence.py`) runs four lookups from request values only. A failed lookup is recorded as unavailable, never as a favourable result.
+- **Policy engine** (`src/policy_engine.py`) takes no model input and makes no network calls. The same input always gives the same output.
+- **AI orchestration.** The model may request supplemental lookups, but each is identity-bound to the request and cannot alter the evidence pack. The model's output schema has no field for approvals, flags, missing information, or human review.
+- **Final validator** (`src/agent/validation.py`) checks evidence citations (only retrieved IDs are kept), appends correction notes where prose would read as an approval that has not been granted, and never removes policy fields.
+- **Injection visibility** (`src/injection_visibility.py`) is a deterministic, pattern-based signal over request text and evidence. It adds `prompt_injection_detected` and changes nothing else. It is not a complete defense.
+- **Human handoff.** `human_review_required` is always true. There is no code path that purchases, approves, changes a budget, or accepts legal terms.
 
-```mermaid
-flowchart TD
-    U[User] --> AN["Analyst<br/>src/agent/staged_agent.py — analyst stage"]
-    AN --> T["Tools<br/>identical allowlist, identical tool modules"]
-    T --> EP[Evidence Pack]
-    EP --> PE["Policy Engine<br/>identical evaluate_policy() call"]
-    PE --> RV["Reviewer<br/>staged_agent.py — reviewer stage; zero tools of its own"]
-    RV --> FV["Final Validator<br/>identical build_procurement_decision() call"]
-    FV --> PD[ProcurementDecision]
-    PD --> HR[Human Review / Approval]
-```
+## Architecture A and B
 
-Verified identical to A's tools/policy engine/validator by object-identity assertions (`tests/test_staged_agent.py::TestCrossArchitectureSharing`), not merely behavioral equivalence.
+Both architectures use the same preflight, policy engine, validator, and handoff. They differ only in orchestration:
 
-## Responsibility Boundary
+- **A (single agent, shipped default):** one model loop that may request supplemental lookups, then one structured synthesis.
+- **B (analyst then reviewer):** an analyst stage that may request supplemental lookups and writes a structured report, then a reviewer stage with no tools that writes the recommendation.
 
-| Layer | Responsibility |
+Architecture B is retained as an evaluated alternative. See `docs/architecture_decision.md`.
+
+## Telemetry
+
+Logical LLM calls (what the orchestrator asked for) and actual HTTP attempts (what left the process, counted at the SDK boundary) are recorded separately. They differ when key rotation or retries occur, so reports never treat attempt counts as pure model-call counts.
+
+## Source map
+
+| Concern | Location |
 |---|---|
-| **AI** (single agent, or analyst+reviewer) | Interpret the request, select tools, synthesize evidence into a recommendation, rationale, and next step |
-| **CODE** (`src/policy_engine.py`) | Thresholds, required-field checks, security/privacy/legal triggers, vendor-conflict/unavailability resolution, human-review requirement — deterministic, no LLM, no network |
-| **HUMAN** | Every approval (Manager/Department Head/Finance/CFO/Procurement/Security/Privacy/Legal), every exception |
-
-This boundary is enforced structurally, not just by convention: the model's output schema (`AgentSynthesis`) has no field for required approvals, risk flags, missing information, or human-review status — there is no code path through which the model could set or override any of them. `human_review_required` is a fixed constant in the policy engine's output construction, not a computed value.
-
-## Evidence Boundary
-
-- **Tools provide facts.** `src/tools/*.py` retrieve structured data and return it as `EvidenceItem` records, never a recommendation or a judgment.
-- **Agents interpret.** The single agent (or analyst/reviewer pair) decides which tools to call and synthesizes what was retrieved into prose — but only ever *cites* evidence by ID, never invents it.
-- **Policy engine enforces rules.** `evaluate_policy()` is the sole source of `required_approvals`, `risk_flags`, `missing_information`, and `human_review_required` in the final decision. It is never exposed to the model as a callable tool, so the model cannot decide whether a policy check "should" run.
-- **Validator prevents unsafe model output from becoming final state.** `src/agent/validation.py::build_procurement_decision()` is the one place that combines model output with policy output: it drops any evidence citation that doesn't correspond to a real, retrieved `EvidenceItem`, falls back to a conservative "route to human review" state if the model's output is missing or malformed, and rewrites any recommendation text that reads as claiming an approval has already been granted. Both architectures call the identical function.
+| Output contract | `src/contracts.py` |
+| Evidence preflight | `src/evidence.py` |
+| Tool registry (identity binding) | `src/agent/tools_registry.py` |
+| Policy engine | `src/policy_engine.py` |
+| Architecture A | `src/agent/single_agent.py` |
+| Architecture B | `src/agent/staged_agent.py` |
+| Final validator | `src/agent/validation.py` |
+| Injection visibility | `src/injection_visibility.py` |
+| Gemini adapter and key pool | `src/agent/gemini_adapter.py`, `src/agent/key_pool.py` |
+| Telemetry counter | `src/agent/attempts.py` |
