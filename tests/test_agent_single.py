@@ -5,8 +5,10 @@ a real Gemini API call or requires GEMINI_API_KEY.
 
 from __future__ import annotations
 
+from src import data_access
 from src.agent.schemas import AgentSynthesis
 from src.agent.single_agent import run_single_agent, run_single_agent_with_trace
+from src.evidence import gather_mandatory_evidence
 from src.policy_engine import VendorRiskAvailability
 from tests.agent_fakes import ScriptedGeminiClient, stop_turn, tool_call, tool_turn
 
@@ -15,6 +17,11 @@ def _synthesis(**overrides) -> AgentSynthesis:
     defaults = dict(recommendation="Proceed with review", rationale="Based on the evidence provided.", evidence_refs=["E1"], next_step="Send for approval.")
     defaults.update(overrides)
     return AgentSynthesis(**defaults)
+
+
+def _preflight_calls(request_id: str) -> int:
+    """Lookups the code-owned preflight makes before the model is asked anything. They count as tool attempts."""
+    return gather_mandatory_evidence(data_access.get_request_validated(request_id)).call_count
 
 
 class TestStraightforwardToolCall:
@@ -29,7 +36,7 @@ class TestStraightforwardToolCall:
         assert client.turn_calls == 2
         assert client.structured_calls == 1
         assert decision.telemetry.llm_calls == 3  # 2 tool turns + 1 synthesis
-        assert decision.telemetry.tool_calls == 1
+        assert decision.telemetry.tool_calls == _preflight_calls("REQ-1001") + 1  # preflight + the one model call
         assert decision.telemetry.architecture == "single"
         assert decision.telemetry.latency_ms is not None and decision.telemetry.latency_ms >= 0
 
@@ -47,7 +54,7 @@ class TestMultipleToolCalls:
         )
         decision = run_single_agent("REQ-1001", client=client)
 
-        assert decision.telemetry.tool_calls == 3
+        assert decision.telemetry.tool_calls == _preflight_calls("REQ-1001") + 3
         assert len(decision.evidence) == 3
 
     def test_multiple_calls_within_a_single_turn(self):
@@ -62,7 +69,7 @@ class TestMultipleToolCalls:
             structured_result=_synthesis(evidence_refs=["E1", "E2"]),
         )
         decision = run_single_agent("REQ-1001", client=client)
-        assert decision.telemetry.tool_calls == 2
+        assert decision.telemetry.tool_calls == _preflight_calls("REQ-1001") + 2
 
 
 class TestFinalStructuredAnswer:
@@ -182,9 +189,10 @@ class TestMaliciousToolResultText:
             ],
             structured_result=_synthesis(evidence_refs=[]),
         )
-        decision = run_single_agent("REQ-1001", client=client)
-        assert decision.telemetry.tool_calls == 1  # the attempt was counted
-        assert decision.evidence == []  # but nothing was actually executed or cited
+        result = run_single_agent_with_trace("REQ-1001", client=client)
+        assert result.decision.telemetry.tool_calls == _preflight_calls("REQ-1001") + 1  # the attempt was counted
+        injected = [r for r in result.registry.execution_log if r.tool_name == "transfer_department_budget"]
+        assert injected and not any(r.success for r in injected)  # but nothing was actually executed
 
 
 class TestPromptInjectionFlagEndToEnd:
@@ -217,7 +225,7 @@ class TestRepeatedToolCall:
         )
         decision = run_single_agent("REQ-1001", client=client)
         assert client.turn_calls == 2  # stopped after the redundant second turn
-        assert decision.telemetry.tool_calls == 2  # both executed, but the loop stopped afterward
+        assert decision.telemetry.tool_calls == _preflight_calls("REQ-1001") + 2  # both executed, but the loop stopped afterward
 
 
 class TestUnsupportedTool:
@@ -229,10 +237,11 @@ class TestUnsupportedTool:
             ],
             structured_result=_synthesis(evidence_refs=[]),
         )
-        decision = run_single_agent("REQ-1001", client=client)
-        # the call was counted (an attempt happened) but produced no evidence
-        assert decision.telemetry.tool_calls == 1
-        assert decision.evidence == []
+        result = run_single_agent_with_trace("REQ-1001", client=client)
+        # the call was counted (an attempt happened) but was never executed
+        assert result.decision.telemetry.tool_calls == _preflight_calls("REQ-1001") + 1
+        unsupported = [r for r in result.registry.execution_log if r.tool_name == "delete_all_purchase_orders"]
+        assert unsupported and not any(r.success for r in unsupported)
         # the model was told the tool failed, via the function-response content
         assert client.function_response_log[0][1]["success"] is False
 
@@ -290,12 +299,13 @@ class TestModelOrApiException:
 
 
 class TestNoToolCallWhenCriticalEvidenceMissing:
-    def test_model_answering_immediately_still_yields_a_safe_missing_evidence_result(self):
+    def test_model_answering_immediately_still_gets_the_authoritative_evidence(self):
         client = ScriptedGeminiClient(turns=[stop_turn()], structured_result=_synthesis(evidence_refs=[]))
         decision = run_single_agent("REQ-1001", client=client)
-        # no employee/budget tool was ever called -- department is unresolved
-        assert "department" in decision.missing_information
-        assert decision.human_review_required is True
+        # The model made no calls, yet the employee/budget preflight ran before it answered, so the
+        # department is resolved. Before the authority boundary this case had zero evidence.
+        assert "department" not in decision.missing_information
+        assert decision.telemetry.tool_calls == _preflight_calls("REQ-1001")
 
 
 class TestUnknownRequestId:

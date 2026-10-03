@@ -10,11 +10,13 @@ import threading
 import pytest
 
 import src.agent.single_agent as single_agent_module
+from src import data_access
 from src.agent.gemini_adapter import ModelOutputError, classify_model_exception
 from src.agent.loop_utils import canonical_arguments
 from src.agent.single_agent import run_single_agent_with_trace
 from src.agent.staged_agent import run_staged_agent_with_trace
 from src.contracts import ProcurementDecision
+from src.evidence import gather_mandatory_evidence
 from src.solution import handle_request
 from tests.agent_fakes import ScriptedGeminiClient, stop_turn, tool_call, tool_turn
 from tests.staged_agent_fakes import ScriptedStagedGeminiClient
@@ -76,23 +78,34 @@ class TestCancellation:
         assert client.turn_calls == 1
 
 
-class TestCorrectiveTurn:
-    def test_a_text_first_answer_gets_exactly_one_corrective_turn_then_tools_run(self):
+class TestTextFirstAnswer:
+    """The corrective nudge was removed with the authority boundary: evidence no longer depends on the
+    model calling tools, so a text-first answer ends the loop and the preflight evidence still applies."""
+
+    def test_a_text_first_answer_ends_the_loop_without_a_corrective_turn(self):
         client = ScriptedGeminiClient(
             turns=[stop_turn(), tool_turn(tool_call("get_employee_budget", employee_id="E004")), stop_turn()],
             structured_result=_synthesis(evidence_refs=["E1"]),
         )
         result = run_single_agent_with_trace("REQ-1001", client=client)
-        assert result.decision.telemetry.tool_calls == 1
-        assert client.turn_calls == 3
+        assert client.turn_calls == 1
+        assert result.decision.telemetry.tool_calls == _preflight_calls("REQ-1001")
 
-    def test_no_corrective_turn_once_evidence_has_been_gathered(self):
+    def test_no_extra_turn_once_a_model_call_has_been_made(self):
         client = ScriptedGeminiClient(
             turns=[tool_turn(tool_call("get_employee_budget", employee_id="E004")), stop_turn()],
             structured_result=_synthesis(evidence_refs=["E1"]),
         )
         run_single_agent_with_trace("REQ-1001", client=client)
         assert client.turn_calls == 2
+
+
+def _preflight_calls(request_id: str) -> int:
+    return gather_mandatory_evidence(data_access.get_request_validated(request_id)).call_count
+
+
+def _preflight_successes(request_id: str) -> int:
+    return sum(1 for r in gather_mandatory_evidence(data_access.get_request_validated(request_id)).execution_log if r.success)
 
 
 class TestCanonicalDuplicateDetection:
@@ -140,8 +153,9 @@ class TestTelemetrySplit:
             structured_result=_synthesis(evidence_refs=["E1"]),
         )
         telemetry = run_single_agent_with_trace("REQ-1001", client=client).decision.telemetry
-        assert telemetry.tool_calls == 2
-        assert telemetry.tool_calls_succeeded == 1
+        assert telemetry.tool_calls == _preflight_calls("REQ-1001") + 2  # preflight + the two model calls
+        # the preflight's successes, plus the one good model call; the unknown tool does not count
+        assert telemetry.tool_calls_succeeded == _preflight_successes("REQ-1001") + 1
 
 
 class TestUnexpectedInternalErrorIsAHumanReviewDecision:
