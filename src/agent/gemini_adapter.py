@@ -150,9 +150,13 @@ class GeminiClient:
         return ModelTurn(function_calls=tuple(calls), text=text, raw_content=raw_content)
 
 
-def create_gemini_client() -> GeminiClient:
+def create_gemini_client():
+    model = os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
+    if os.environ.get("GEMINI_API_KEY_POOL"):
+        from src.agent.key_pool import PooledGeminiClient, load_key_pool
+
+        return PooledGeminiClient(load_key_pool(), model)
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise GeminiConfigurationError("GEMINI_API_KEY is not set.")
-    model = os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
     return GeminiClient(api_key=api_key, model=model)

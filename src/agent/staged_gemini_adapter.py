@@ -41,9 +41,13 @@ class StagedGeminiClient(GeminiClient):
             return None
 
 
-def create_staged_gemini_client() -> StagedGeminiClient:
+def create_staged_gemini_client():
+    model = os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
+    if os.environ.get("GEMINI_API_KEY_POOL"):
+        from src.agent.key_pool import PooledStagedGeminiClient, load_key_pool
+
+        return PooledStagedGeminiClient(load_key_pool(), model)
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise GeminiConfigurationError("GEMINI_API_KEY is not set.")
-    model = os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
     return StagedGeminiClient(api_key=api_key, model=model)
