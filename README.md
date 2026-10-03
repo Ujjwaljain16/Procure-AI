@@ -33,15 +33,55 @@ The request is validated structurally. Evidence is gathered by deterministic cod
 
 ## Screenshots
 
-**Request intake** — `REQ-1003`, a source-code-access request, before analysis:
+All screenshots below are from a live run on `REQ-1003`, a source-code-access request for CodeMate (annual cost $18,000, 30 users), using `google/gemini-3.7-flash` through CloseRouter.
 
-![Request details screen](docs/images/screenshot_request_intake_req1003.jpg)
+**Live analysis enabled.** The sidebar confirms the model and endpoint in use:
 
-**Full decision output** — `REQ-1005`, showing every required output field together. This capture was taken while the Gemini quota was exhausted, and it shows the documented safe state: `human_review_required`, all deterministic policy fields, and every approval and risk flag still populated, rather than a crash or a fabricated recommendation:
+![Sidebar showing live analysis enabled](docs/images/01_sidebar_live_status.png)
 
-![Full decision output screen](docs/images/screenshot_reliability_req1005.jpg)
+**Request intake, staged architecture.** The request is validated and shown before analysis:
 
-These screenshots come from earlier builds of the UI. They show the decision fields the product still produces.
+![Request intake before analysis, staged architecture](docs/images/02_request_intake_staged.png)
+
+**Recommendation, staged architecture (Architecture B).** The recommendation routes the request for human review and four approvals. The "Why?" panel cites evidence IDs for each claim:
+
+![Staged recommendation with rationale and policy constraints](docs/images/03_recommendation_staged.png)
+
+**Vendor security and policy checks.** The internal registry and the live vendor-risk service are shown side by side, and each policy rule is marked as passed or required:
+
+![Vendor security panel and policy checks](docs/images/04_vendor_security_policy_checks.png)
+
+**Evidence.** Every item has a stable ID and a reference to its source:
+
+![Evidence panel with source references](docs/images/05_evidence_policy_checks.png)
+
+**Human review and handoff.** The reason for review, the required reviewers, and a copy-ready handoff summary. The AI action line states that no approval was executed:
+
+![Human review required with handoff summary](docs/images/06_human_review_handoff.png)
+
+**Run details and audit trail, staged.** Five model calls (four analyst, one reviewer), nine tool calls, and 32.5 s latency:
+
+![Staged run audit trail with tool calls and decision trace](docs/images/07_audit_trail_staged.png)
+
+**Recommendation, single agent (Architecture A, the default).** The same request, analysed by one agent, reaches the same policy outcome: human review and multi-stakeholder approvals. The approvers themselves come from the deterministic policy engine:
+
+![Single-agent recommendation](docs/images/08_recommendation_single.png)
+
+**Run details and audit trail, single agent.** Three model calls, eight tool calls, and 35.7 s latency:
+
+![Single-agent run audit trail](docs/images/09_audit_trail_single.png)
+
+**Evidence panel with repeated lookups.** In this run the model re-requested some lookups, so E7 to E9 repeat E1 to E3. The policy result is unchanged. This is a known presentation issue, listed under Known Limitations:
+
+![Evidence panel showing repeated items from supplemental lookups](docs/images/10_evidence_panel_repeated_lookups.png)
+
+**Request intake, single agent.** The default architecture, before analysis:
+
+![Request intake before analysis, single agent](docs/images/11_request_intake_single.png)
+
+**Degraded state (earlier build).** `REQ-1005` captured while the Gemini quota was exhausted. The product shows the documented safe state: `human_review_required`, deterministic policy fields, and every approval and risk flag still populated, not a crash or a fabricated recommendation:
+
+![Degraded state with human review required](docs/images/screenshot_reliability_req1005.jpg)
 
 ## Quick Start
 
@@ -225,6 +265,7 @@ The brief's six required edge cases, with the cases that exercise them:
 ## Known Limitations
 
 - **Live evidence is small.** The final live run is one run of 16 cases, descriptive only. The live model made supplemental tool lookups in both architectures.
+- **Repeated evidence rows in the UI.** When the model re-requests a lookup, the evidence panel can show the same item twice (see the screenshot "Evidence panel with repeated lookups"). The policy fields and approvals are computed once and are unaffected, but the panel is not yet deduplicated.
 - **Prompt-injection visibility is pattern-based.** It is a visibility signal, not a complete defense. Paraphrased attacks may evade it.
 - **Recommendation text is not scored offline.** Offline dimensions classify structured fields; free text is checked only for unqualified approval claims.
 - **Dimensions 1 and 2 overlap dimension 7.** They classify the same structured fields.
