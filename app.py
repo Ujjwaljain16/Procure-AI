@@ -17,7 +17,9 @@ import streamlit as st
 from src.agent.single_agent import run_single_agent_with_trace
 from src.agent.staged_agent import run_staged_agent_with_trace
 from src.agent.timeout_guard import MAX_ANALYSIS_SECONDS, run_with_timeout
+from src.audit import append_record, build_record
 from src.data_access import MalformedRequestError
+from src.live_status import live_analysis_status
 from src.ui.view_model import ProcurementView, build_procurement_view, classify_failure_reason, md_escape
 
 ROOT = Path(__file__).resolve().parent
@@ -43,6 +45,9 @@ request_id = st.sidebar.selectbox(
     format_func=lambda rid: f"{rid} - {BY_ID[rid]['product_name']}",
 )
 architecture = st.sidebar.radio("Architecture", ["single", "staged"], horizontal=True)
+
+live_on, live_message = live_analysis_status()
+(st.sidebar.success if live_on else st.sidebar.warning)(live_message)
 
 st.sidebar.divider()
 st.sidebar.caption("Requests in this session")
@@ -76,6 +81,23 @@ with header_cols[3]:
     st.write("")
     run_clicked = st.button("Run analysis", type="primary", use_container_width=True)
 
+def _audit(status, result=None):
+    """One audit record per analysis attempt. Records identifiers and policy fields only; errors by class name."""
+    decision = result.decision if result is not None else None
+    telemetry = decision.telemetry if decision is not None else None
+    append_record(
+        build_record(
+            request_id=request_id,
+            raw_request=BY_ID[request_id],
+            architecture=architecture,
+            status=status,
+            decision=decision,
+            registry=getattr(result, "registry", None),
+            model=getattr(telemetry, "model", None),
+        )
+    )
+
+
 if run_clicked:
     runner = run_staged_agent_with_trace if architecture == "staged" else run_single_agent_with_trace
     spinner_text = (
@@ -84,15 +106,20 @@ if run_clicked:
     with st.spinner(spinner_text):
         try:
             result = run_with_timeout(lambda cancel: runner(request_id, cancel_event=cancel))
+            degraded = result.gemini_unavailable_reason
+            _audit(f"degraded:{degraded}" if degraded else "ok", result)
             st.session_state.results[cache_key] = build_procurement_view(result)
         except (KeyError, MalformedRequestError) as exc:
+            _audit(f"rejected:{type(exc).__name__}")
             st.session_state.results[cache_key] = {"kind": "invalid_request", "message": str(exc)}
         except TimeoutError:
+            _audit("timeout")
             st.session_state.results[cache_key] = {
                 "kind": "timeout",
                 "message": f"Analysis did not complete within {MAX_ANALYSIS_SECONDS:.0f}s.",
             }
         except Exception as exc:  # last-resort UI guard: never show a blank page
+            _audit(f"unexpected_error:{type(exc).__name__}")
             st.session_state.results[cache_key] = {
                 "kind": "unexpected_error",
                 "message": f"{type(exc).__name__}: {exc}",

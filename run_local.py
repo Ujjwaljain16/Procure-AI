@@ -8,10 +8,8 @@ import time
 from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent
-load_dotenv(ROOT / ".env", override=False)
 
 
 LOOPBACK = "127.0.0.1"
