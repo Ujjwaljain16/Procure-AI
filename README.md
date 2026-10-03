@@ -55,15 +55,21 @@ source .venv/bin/activate
 
 python -m pip install -r requirements.txt
 python verify_setup.py       # no-LLM sanity check
-cp .env.example .env         # Windows: Copy-Item .env.example .env
 ```
 
-Edit `.env` and add your Gemini API key:
+Live analysis is optional. The application reads configuration from the **process environment only**; it never reads a `.env` file, so starting the app cannot silently enable live calls. To enable live analysis, set the variable in the shell you start the app from:
 
+```bash
+# Windows (PowerShell)
+$env:GEMINI_API_KEY = "your-key-here"
+# macOS / Linux
+export GEMINI_API_KEY="your-key-here"
+
+# optional
+export GEMINI_MODEL=gemini-2.5-flash
 ```
-GEMINI_API_KEY=your-key-here
-GEMINI_MODEL=gemini-2.5-flash   # optional; this is the default
-```
+
+`.env.example` documents the variables. Copying it does nothing unless you set the same variables in the environment.
 
 Then:
 
@@ -71,7 +77,9 @@ Then:
 python run_local.py
 ```
 
-This starts the mock vendor-risk API on `http://127.0.0.1:8001` and the Streamlit UI on `http://127.0.0.1:8501`. Prerequisites: **Python 3.11+**. No key is needed to explore the UI or run the test suite. Without a key the product degrades to an explicit "automated analysis unavailable, manual review required" state rather than crashing or fabricating a result. Never commit `.env`.
+The sidebar shows whether live analysis is enabled: `Live analysis: Enabled`, or `Live analysis: Disabled — GEMINI_API_KEY not configured`. Each analysis attempt, including failures, appends one line to `runs/audit.jsonl` (git-ignored; see below).
+
+This starts the mock vendor-risk API on `http://127.0.0.1:8001` and the Streamlit UI on `http://127.0.0.1:8501`. Prerequisites: **Python 3.11+**. No key is needed to explore the UI or run the test suite. Without a key the product degrades to an explicit "automated analysis unavailable, manual review required" state rather than crashing or fabricating a result. Never commit a key.
 
 ## Read me first
 
@@ -83,7 +91,9 @@ This starts the mock vendor-risk API on `http://127.0.0.1:8001` and the Streamli
 
 ## Gemini keys and quota
 
-The free tier limits requests per key per day. Several keys can be pooled: set `GEMINI_API_KEY_POOL` in your environment or `.env` to a comma-separated list, and the app and the live evaluator rotate to the next key when one is exhausted or overloaded. Keys are never logged; only their index appears. Do not commit `.env`, and rotate any key that has been shared outside your own environment.
+The free tier limits requests per key per day. Several keys can be pooled: set `GEMINI_API_KEY_POOL` in your environment to a comma-separated list, and the app and the live evaluator rotate to the next key when one is exhausted or overloaded. Keys are never logged; only their index appears. Do not commit keys, and rotate any key that has been shared outside your own environment.
+
+**Audit record.** Each analysis attempt appends one JSON line to `runs/audit.jsonl` (git-ignored; override with `PROCUREAI_AUDIT_LOG`): request identifier, a hash of the submitted request, evidence identifiers, the policy fields, architecture, model, git revision, and run status. It holds no request prose, no model prose, and no key.
 
 ## Checks before sharing or submitting
 
