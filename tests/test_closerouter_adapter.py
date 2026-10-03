@@ -233,3 +233,38 @@ def test_a_closerouter_production_run_is_reported_as_a_live_model_call(monkeypat
     assert payload["transports"] == [ev.CLOSEROUTER_LABEL]
     assert payload["live_model_called"] is True
     assert payload["provider"] == "closerouter"
+
+
+# --- structured-output robustness -------------------------------------------------------------------------
+
+from src.agent.closerouter_adapter import extract_json_object  # noqa: E402
+
+
+@pytest.mark.parametrize("reply", [
+    '{"a": 1}',
+    '```json\n{"a": 1}\n```',
+    'Here is the result:\n{"a": 1}\nThanks.',
+    '{"a": "brace } inside a string", "b": 2}',
+])
+def test_the_first_json_object_is_extracted_from_common_wrappers(reply):
+    assert json.loads(extract_json_object(reply))["a"] in (1, "brace } inside a string")
+
+
+def test_a_reply_without_an_object_still_fails_validation_as_parse_failed():
+    http = FakeCloseRouterHttp("malformed")
+    result = run_single_agent_with_trace("REQ-1001", client=_client(http))
+    assert result.gemini_unavailable_reason == "PARSE_FAILED"
+
+
+def test_a_fenced_structured_reply_is_accepted():
+    class Fenced(FakeCloseRouterHttp):
+        def post(self, url, headers, json, timeout):
+            self.calls += 1
+            if "tools" in json:
+                return _choice({"role": "assistant", "content": ""})
+            system = json["messages"][0]["content"]
+            body = REPORT_OK if '"contextual_risks"' in system else SYNTH_OK
+            return _choice({"role": "assistant", "content": "```json\n" + json_dumps(body) + "\n```"})
+
+    result = run_single_agent_with_trace("REQ-1001", client=_client(Fenced("normal")))
+    assert result.gemini_unavailable_reason is None

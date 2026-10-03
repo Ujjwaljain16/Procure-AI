@@ -33,6 +33,41 @@ MODEL_ENV = "CLOSEROUTER_MODEL"
 BASE_URL_ENV = "CLOSEROUTER_BASE_URL"
 
 
+def extract_json_object(text: str) -> str:
+    """Return the first complete JSON object in a model reply. Models in JSON mode sometimes wrap the object in a
+    code fence or add a sentence before it. Those wrappers are removed here. The object itself is still validated
+    against the Pydantic model, so a reply that is not a valid object still fails."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        first_line_end = stripped.find("\n")
+        stripped = stripped[first_line_end + 1 :] if first_line_end >= 0 else stripped[3:]
+        stripped = stripped.rsplit("```", 1)[0]
+    start = stripped.find("{")
+    if start < 0:
+        return stripped
+    depth = 0
+    in_string = False
+    escape = False
+    for index in range(start, len(stripped)):
+        char = stripped[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return stripped[start : index + 1]
+    return stripped[start:]
+
+
 class _RequestsHttp:
     """The HTTP boundary: one method, post(). Tests and the evaluator's instrumentation replace this object."""
 
@@ -97,7 +132,7 @@ class CloseRouterClient:
         if not text.strip():
             raise ModelOutputError("EMPTY_RESPONSE")
         try:
-            return schema_model.model_validate_json(text)
+            return schema_model.model_validate_json(extract_json_object(text))
         except Exception as exc:
             raise ModelOutputError("PARSE_FAILED", type(exc).__name__) from exc
 
