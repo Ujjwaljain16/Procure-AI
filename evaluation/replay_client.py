@@ -42,6 +42,9 @@ class ReplayGeminiClient:
                     args["product_name"] = product_name
                 if vendor_name:
                     args["vendor_name"] = vendor_name
+                if self._raw.get("category"):
+                    # Policy section 3 asks for the same product or vendor AND the same category.
+                    args["category"] = self._raw["category"]
                 calls.append(ToolCall(call_id="replay-2", name="search_catalog", arguments=args))
             if vendor_name:
                 calls.append(ToolCall(call_id="replay-3", name="get_vendor_evidence", arguments={"vendor_name": vendor_name}))

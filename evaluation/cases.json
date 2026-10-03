@@ -51,7 +51,7 @@
       "request_id": "REQ-1002",
       "notes": "BrandBoard Enterprise -- business justification itself says PixelCraft (an existing tool) is 'too specialist'; new vendor, tests overlap + legal (new vendor, cost) + security review together.",
       "expected": {
-        "risk_flags_include": ["legal_review_required"],
+        "risk_flags_include": ["existing_tool_overlap", "legal_review_required"],
         "human_review_required": true
       },
       "tags": ["ambiguous_request", "existing_tool_overlap", "legal_threshold"]
