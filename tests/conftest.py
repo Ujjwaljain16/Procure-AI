@@ -58,3 +58,15 @@ def live_vendor_records(monkeypatch):
     records = load_records()
     monkeypatch.setattr(vendor_risk_tool.vendor_client, "get_vendor_risk", records_lookup(records))
     return records
+
+
+@pytest.fixture(autouse=True)
+def _no_gemini_credentials_leak_into_a_test():
+    """Guard for the intermittent test failure: a Gemini credential variable present when a test begins
+    means an earlier test or import left it set. That would send a test to the production client, so the
+    run fails here, naming the variable, rather than making a live call or failing somewhere unrelated.
+    Tests that need a key set it with monkeypatch, which restores the environment afterwards."""
+    leaked = [name for name in _GEMINI_VARS if name in os.environ]
+    if leaked:
+        pytest.fail(f"{', '.join(leaked)} already set when this test began; an earlier test or import leaked it")
+    yield
