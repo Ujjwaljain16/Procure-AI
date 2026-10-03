@@ -301,7 +301,8 @@ if isinstance(result, ProcurementView):
             st.caption("No evidence was retrieved for this request.")
         for item in view.evidence:
             with st.container(border=True):
-                st.markdown(f"**{item.evidence_id}** &nbsp;·&nbsp; _{item.source}_")
+                label = f"**{item.evidence_id}**" + (f" — repeat of {item.repeat_of}" if item.repeat_of else "")
+                st.markdown(f"{label} &nbsp;·&nbsp; _{item.source}_")
                 st.markdown(md_escape(item.finding))
                 if item.reference:
                     st.caption(f"Reference: {md_escape(item.reference)}")

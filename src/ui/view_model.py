@@ -116,6 +116,8 @@ class EvidenceView:
     source: str
     finding: str
     reference: Optional[str]
+    # The earlier evidence ID with the same source, finding, and reference, when a lookup was repeated.
+    repeat_of: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -273,10 +275,23 @@ def _build_request_details(raw_request: dict, employee_name: Optional[str], depa
 
 
 def _build_evidence(evidence_index: tuple) -> tuple[EvidenceView, ...]:
-    return tuple(
-        EvidenceView(evidence_id=eid, source=item.source, finding=item.finding, reference=item.reference)
-        for eid, item in evidence_index
-    )
+    """Every evidence ID is kept, so citations still resolve. A repeated lookup is marked with the
+    first ID that recorded the same fact. The decision data is not changed."""
+    first_seen: dict[tuple, str] = {}
+    views = []
+    for eid, item in evidence_index:
+        key = (item.source, item.finding, item.reference)
+        views.append(
+            EvidenceView(
+                evidence_id=eid,
+                source=item.source,
+                finding=item.finding,
+                reference=item.reference,
+                repeat_of=first_seen.get(key),
+            )
+        )
+        first_seen.setdefault(key, eid)
+    return tuple(views)
 
 
 def _build_policy_checks(checks: tuple[PolicyCheck, ...]) -> tuple[PolicyCheckView, ...]:
