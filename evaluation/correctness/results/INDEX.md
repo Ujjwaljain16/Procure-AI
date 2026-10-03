@@ -14,3 +14,10 @@ This folder holds the correctness layer (layer 2, offline) and the real-model sa
 `archive/` holds superseded offline runs made while the ground truth and provenance fields were being finalised. They are kept for audit and are not cited as results.
 
 - `correctness_real_20261003T121623Z.json` is a **partial** live run, recorded before the independent HTTP counter existed. Its attempt integrity check did not run. It is not a result. Do not cite it as the live A/B outcome.
+
+## Failed live attempts (provider outage, not results)
+
+- `archive/FAILED_closerouter_attempt_140551Z.json` and `archive/FAILED_closerouter_attempt_140625Z.json`: two copies of the same
+  CloseRouter 16-case attempt at git revision `aa2fafe`. Only 3 of 32 cells completed. The rest failed with HTTP 503 (no available
+  upstream for `google/gemini-3-flash`, circuit open at the provider), HTTP 429, and read timeouts. These are provider-availability
+  failures, not architecture or model results. Do not cite them.
