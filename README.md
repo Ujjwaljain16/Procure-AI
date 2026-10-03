@@ -33,7 +33,7 @@ The request is validated structurally. Evidence is gathered by deterministic cod
 
 ## Screenshots
 
-All screenshots below are from a live run on `REQ-1003`, a source-code-access request for CodeMate (annual cost $18,000, 30 users), using `google/gemini-3.7-flash` through CloseRouter.
+The first set of screenshots is from a live run on `REQ-1003`, a source-code-access request for CodeMate (annual cost $18,000, 30 users). The REQ-1005 pair further down is a second live run, on a different request. Both use `google/gemini-3.7-flash` through CloseRouter.
 
 **Live analysis enabled.** The sidebar confirms the model and endpoint in use:
 
@@ -78,6 +78,14 @@ All screenshots below are from a live run on `REQ-1003`, a source-code-access re
 **Request intake, single agent.** The default architecture, before analysis:
 
 ![Request intake before analysis, single agent](docs/images/11_request_intake_single.png)
+
+**Second live run, `REQ-1005`.** A ProspectPilot request from Sales (annual cost $22,000, 35 users, customer PII). The recommendation requires human review and multi-stakeholder approvals, because the department's $18,000 budget is insufficient and the vendor's security assessment is incomplete:
+
+![REQ-1005 single-agent recommendation](docs/images/12_recommendation_req1005_single.png)
+
+**Vendor not yet assessed (`REQ-1005`).** GrowthForge has no completed security review. The vendor panel shows the status as missing rather than approved, and the policy checks flag the vendor-assessment and customer-PII requirements:
+
+![REQ-1005 vendor security missing and policy checks](docs/images/13_vendor_missing_evidence_req1005.png)
 
 **Degraded state (earlier build).** `REQ-1005` captured while the Gemini quota was exhausted. The product shows the documented safe state: `human_review_required`, deterministic policy fields, and every approval and risk flag still populated, not a crash or a fabricated recommendation:
 
