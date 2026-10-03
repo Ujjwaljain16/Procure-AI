@@ -20,16 +20,19 @@ api_attempts is reported as not measured.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Callable, Iterator, Optional
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -37,7 +40,7 @@ if str(ROOT) not in sys.path:
 
 from src import data_access  # noqa: E402
 from src.agent import single_agent, staged_agent  # noqa: E402
-from src.agent.gemini_adapter import ModelOutputError, ModelTurn, ToolCall  # noqa: E402
+from src.agent.gemini_adapter import GeminiConfigurationError, ModelOutputError, ModelTurn, ToolCall  # noqa: E402
 from src.agent.schemas import AgentSynthesis  # noqa: E402
 from src.agent.staged_schemas import AnalystReport  # noqa: E402
 from src.data_access import MalformedRequestError  # noqa: E402
@@ -280,26 +283,109 @@ def _evidence_key(item) -> tuple:
     return (item.source, item.finding, item.reference)
 
 
-def execute(case: dict, arch: str, mode: str) -> dict:
+OFFLINE_LABEL = "offline_stand_in"
+REAL_LABEL = "gemini_real"
+FAKE_BOUNDARY_LABEL = "gemini_fake_boundary"  # tests and self-checks only; never reached by the CLI
+
+
+class EvaluationIntegrityError(RuntimeError):
+    """The run did not cover the ground truth, or a requested case does not exist. Results are not written."""
+
+
+@dataclass(frozen=True)
+class TransportInfo:
+    """What a factory hands the runner: a label for the transport and a way to count its HTTP calls.
+
+    ``http_calls`` returns the transport-side count of generate_content calls, or None when there is no
+    transport to count (the offline stand-in makes no HTTP calls at all)."""
+
+    label: str
+    http_calls: Callable[[], Optional[int]]
+
+
+def offline_factory(arch: str, mode: str, raw: dict):
+    """Offline transport: the scripted stand-in above the adapter. Never constructs a real client."""
+    return ModeClient(mode, raw), TransportInfo(OFFLINE_LABEL, lambda: None)
+
+
+def real_factory(make_transports: Optional[Callable[[str, str, dict], list]] = None):
+    """Transport for real-model runs.
+
+    With ``make_transports`` None this is production: the real adapters are built from the environment
+    (GEMINI_API_KEY or GEMINI_API_KEY_POOL). It raises GeminiConfigurationError when no key is set, and
+    the caller must report that rather than fall back.
+
+    With ``make_transports`` given (tests and self-checks), the real adapters are built and their HTTP
+    boundary is replaced by the returned transports, one per key. Fault modes are only allowed in this
+    form, because a live run cannot be made to fail on purpose."""
+
+    def factory(arch: str, mode: str, raw: dict):
+        if make_transports is None:
+            if mode != "normal":
+                raise ValueError(f"fault mode '{mode}' needs a fake transport; live runs are normal mode only")
+            return _production_client(arch), TransportInfo(REAL_LABEL, lambda: None)
+        transports = make_transports(arch, mode, raw)
+        client = _fake_boundary_client(arch, transports)
+        return client, TransportInfo(FAKE_BOUNDARY_LABEL, lambda: sum(t.calls for t in transports))
+
+    return factory
+
+
+def _production_client(arch: str):
+    from src.agent.gemini_adapter import create_gemini_client
+    from src.agent.staged_gemini_adapter import create_staged_gemini_client
+
+    return create_staged_gemini_client() if arch == "staged" else create_gemini_client()
+
+
+def _fake_boundary_client(arch: str, transports: list):
+    """Build the real adapter (single key) or the real key pool (several keys), then replace only the HTTP object."""
+    from src.agent.gemini_adapter import DEFAULT_MODEL, GeminiClient
+    from src.agent.key_pool import PooledGeminiClient, PooledStagedGeminiClient
+    from src.agent.staged_gemini_adapter import StagedGeminiClient
+
+    model = os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
+    if len(transports) == 1:
+        client = (StagedGeminiClient if arch == "staged" else GeminiClient)(api_key="fake-transport", model=model)
+        client._client = transports[0]
+        return client
+    keys = [f"fake-key-{i}" for i in range(len(transports))]
+    pool = (PooledStagedGeminiClient if arch == "staged" else PooledGeminiClient)(keys, model)
+    for sub, transport in zip(pool._clients, transports):
+        sub._client = transport
+    return pool
+
+
+def execute(case: dict, arch: str, mode: str, factory=offline_factory) -> dict:
+    """Run one (case, architecture, mode) through the factory's transport and return the observed fields.
+
+    Transport-independent: the same code scores the offline stand-in and the live model."""
     with case_environment(case) as raw:
-        client = ModeClient(mode, raw)
+        try:
+            client, info = factory(arch, mode, raw)
+        except GeminiConfigurationError as exc:
+            # Missing key: report it as a failed run, the same way a model failure is reported.
+            return _failed_run(OFFLINE_LABEL if factory is offline_factory else REAL_LABEL, f"NO_KEY:{type(exc).__name__}")
         runner = single_agent.run_single_agent_with_trace if arch == "single" else staged_agent.run_staged_agent_with_trace
+        http_before = info.http_calls()
         start = time.perf_counter()
         try:
             result = runner(raw["request_id"], client=client)
         except MalformedRequestError as exc:
-            return {"rejected": True, "error": type(exc).__name__, "llm_calls": 0, "tool_calls": 0, "api_attempts": None,
-                    "latency_ms": (time.perf_counter() - start) * 1000}
+            return _failed_run(info.label, type(exc).__name__, rejected=True, latency_ms=(time.perf_counter() - start) * 1000)
         except Exception as exc:  # an unexpected failure is a finding, recorded as a rejected run with its own error name
-            return {"rejected": True, "error": f"UNHANDLED:{type(exc).__name__}", "llm_calls": 0, "tool_calls": 0, "api_attempts": None,
-                    "latency_ms": (time.perf_counter() - start) * 1000}
+            return _failed_run(info.label, f"UNHANDLED:{type(exc).__name__}", rejected=True, latency_ms=(time.perf_counter() - start) * 1000)
         latency_ms = (time.perf_counter() - start) * 1000
+        http_after = info.http_calls()
 
     decision = result.decision
     telemetry = decision.telemetry
+    http_delta = None if http_after is None or http_before is None else http_after - http_before
     return {
         "rejected": False,
         "error": None,
+        "transport": info.label,
+        "model": getattr(telemetry, "model", None),
         "approvals": list(decision.required_approvals),
         "flags": list(decision.risk_flags),
         "missing": list(decision.missing_information),
@@ -313,8 +399,17 @@ def execute(case: dict, arch: str, mode: str) -> dict:
         "llm_calls": telemetry.llm_calls,
         "tool_calls": telemetry.tool_calls,
         "api_attempts": getattr(telemetry, "api_attempts", None),
+        "http_calls": http_delta,
         "latency_ms": latency_ms,
         "gemini_unavailable_reason": result.gemini_unavailable_reason,
+    }
+
+
+def _failed_run(label: str, error: str, *, rejected: bool = True, latency_ms: float = 0.0) -> dict:
+    return {
+        "rejected": rejected, "error": error, "transport": label, "model": None,
+        "llm_calls": 0, "tool_calls": 0, "api_attempts": None, "http_calls": None,
+        "latency_ms": latency_ms, "gemini_unavailable_reason": None,
     }
 
 
@@ -518,13 +613,35 @@ def _git_revision() -> Optional[str]:
         return None
 
 
-def evaluate(truth: dict, archs=ARCHS, modes=MODES, case_ids: Optional[set] = None) -> dict:
+def _worktree_clean() -> Optional[bool]:
+    """True when tracked files match HEAD, so git_revision describes the code that ran."""
+    try:
+        result = subprocess.run(["git", "diff", "--quiet", "HEAD", "--"], cwd=ROOT, capture_output=True, timeout=10)
+        return result.returncode == 0
+    except Exception:
+        return None
+
+
+def _attempts_match_transport(observed: dict) -> Optional[bool]:
+    """Integrity: the run's own API-attempt count must equal the transport's independent call count."""
+    if observed.get("rejected") or observed.get("http_calls") is None or observed.get("api_attempts") is None:
+        return None
+    return observed["api_attempts"] == observed["http_calls"]
+
+
+def evaluate(truth: dict, archs=ARCHS, modes=MODES, case_ids: Optional[set] = None, factory=offline_factory) -> dict:
+    """Score every (case, architecture, mode) cell. The transport is supplied by ``factory``; scoring is shared."""
+    known = {c["case_id"] for c in truth["cases"]}
+    if case_ids is not None and not set(case_ids) <= known:
+        raise EvaluationIntegrityError(f"requested cases are not in the ground truth: {sorted(set(case_ids) - known)}")
     cases = [c for c in truth["cases"] if case_ids is None or c["case_id"] in case_ids]
+    # The normal run is the parity and identity baseline, so it always executes. It is scored only if requested.
+    execute_modes = tuple(dict.fromkeys(("normal",) + tuple(modes)))
     observed = {}
     for case in cases:
         for arch in archs:
-            for mode in modes:
-                observed[(case["case_id"], arch, mode)] = execute(case, arch, mode)
+            for mode in execute_modes:
+                observed[(case["case_id"], arch, mode)] = execute(case, arch, mode, factory)
 
     rows = []
     for case in cases:
@@ -535,17 +652,36 @@ def evaluate(truth: dict, archs=ARCHS, modes=MODES, case_ids: Optional[set] = No
             for mode in modes:
                 obs = observed[(case["case_id"], arch, mode)]
                 dims = score_cell(expected, obs, mode, arch, injection)
+                fault_observed = None
                 if mode in ("malformed", "outage"):
-                    score_parity(obs, normal, dims, expected)
+                    if not obs["rejected"] and obs.get("gemini_unavailable_reason") is None:
+                        # An injected fault that left no trace is a failure of the harness, not a pass.
+                        fault_observed = False
+                        dims["d10_outage_and_malformed_parity"] = False
+                    else:
+                        fault_observed = True
+                        score_parity(obs, normal, dims, expected)
                 if mode == "normal":
                     dims["d10_outage_and_malformed_parity"] = None
                 failures = [d for d, v in dims.items() if v is False]
-                identity = _deterministic_tuple(obs) == _deterministic_tuple(normal) if not (obs["rejected"] or normal["rejected"]) else (obs["error"] == normal["error"])
+                if fault_observed is False:
+                    failures.append("fault_not_observed")
+                identity = (
+                    _deterministic_tuple(obs) == _deterministic_tuple(normal)
+                    if not (obs["rejected"] or normal["rejected"])
+                    else obs["error"] == normal["error"]
+                )
+                attempts_ok = _attempts_match_transport(obs)
+                if attempts_ok is False:
+                    failures.append("attempts_mismatch_transport")
+                text_hash = hashlib.sha256(f"{obs.get('recommendation') or ''}|{obs.get('next_step') or ''}".encode("utf-8")).hexdigest()
                 rows.append({
                     "case_id": case["case_id"],
                     "group": case["group"],
                     "architecture": arch,
                     "mode": mode,
+                    "transport": obs.get("transport"),
+                    "model": obs.get("model"),
                     "expected": {k: expected.get(k) for k in ("recommendation_class", "next_action_class", "approvals_must_include", "flags_must_include", "missing_exact", "input_rejected")},
                     "actual": {
                         "rejected": obs["rejected"],
@@ -556,16 +692,26 @@ def evaluate(truth: dict, archs=ARCHS, modes=MODES, case_ids: Optional[set] = No
                         "missing_information": obs.get("missing", []),
                         "human_review_required": obs.get("human_review_required"),
                         "logical_llm_calls": obs["llm_calls"],
-                        "api_attempts": obs["api_attempts"],
+                        "api_attempts": obs.get("api_attempts"),
+                        "http_calls": obs.get("http_calls"),
                         "tool_calls": obs["tool_calls"],
                         "latency_ms": round(obs["latency_ms"], 3),
                         "evidence_count": obs.get("evidence_count"),
                         "gemini_unavailable_reason": obs.get("gemini_unavailable_reason"),
+                        "claim_check_passed": None if obs["rejected"] else claim_check_passes(obs),
+                        # text is never stored; only its digest, so results carry no model or request prose
+                        "text_sha256": text_hash,
                     },
+                    "integrity": {"attempts_match_transport": attempts_ok, "fault_observed": fault_observed},
                     "dimensions": dims,
                     "failure_reasons": failures,
                     "boundary_identity_with_normal": identity,
                 })
+
+    expected_cells = {(c["case_id"], a, m) for c in cases for a in archs for m in modes}
+    got_cells = {(r["case_id"], r["architecture"], r["mode"]) for r in rows}
+    if got_cells != expected_cells or len(rows) != len(expected_cells):
+        raise EvaluationIntegrityError(f"coverage mismatch: missing={sorted(expected_cells - got_cells)} extra={sorted(got_cells - expected_cells)}")
     return {"rows": rows, "cases": cases, "observed": observed}
 
 
@@ -606,50 +752,131 @@ def summarize(rows: list[dict]) -> dict:
     return summary
 
 
-def write_results(payload: dict) -> Path:
+def integrity_summary(rows: list[dict]) -> dict:
+    attempts = [r["integrity"]["attempts_match_transport"] for r in rows if r["integrity"]["attempts_match_transport"] is not None]
+    faults = [r["integrity"]["fault_observed"] for r in rows if r["integrity"]["fault_observed"] is not None]
+    return {
+        "attempt_checks": len(attempts),
+        "attempt_mismatches": sum(1 for v in attempts if not v),
+        "fault_checks": len(faults),
+        "faults_not_observed": sum(1 for v in faults if not v),
+    }
+
+
+def run_real(truth: dict, archs=ARCHS, modes=("normal",), case_ids: Optional[set] = None, make_transports=None) -> dict:
+    """Real-model correctness run. The same ground truth, cases, and scorers as the offline run; only the
+    transport differs. With make_transports None it is production (live Gemini, normal mode only)."""
+    run = evaluate(truth, archs=archs, modes=modes, case_ids=case_ids, factory=real_factory(make_transports))
+    return _payload(truth, run, archs, modes, layer="correctness, real-model transport (same ground truth and scorers as offline)")
+
+
+def run_offline(truth: dict, archs=ARCHS, modes=MODES, case_ids: Optional[set] = None) -> dict:
+    run = evaluate(truth, archs=archs, modes=modes, case_ids=case_ids, factory=offline_factory)
+    return _payload(truth, run, archs, modes, layer="correctness, offline stand-in transport")
+
+
+def _payload(truth: dict, run: dict, archs, modes, layer: str) -> dict:
+    labels = sorted({r["transport"] for r in run["rows"] if r.get("transport")})
+    models = sorted({r["model"] for r in run["rows"] if r.get("model")})
+    return {
+        "layer": layer,
+        "timestamp": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "git_revision": _git_revision(),
+        "worktree_clean": _worktree_clean(),
+        "ground_truth_sha256": truth["_sha256"],
+        "transports": labels,
+        "live_model_called": REAL_LABEL in labels,
+        "models": models,
+        "architectures": list(archs),
+        "modes": list(modes),
+        "llm_call_contract": LLM_CALL_CONTRACT,
+        "summary": summarize(run["rows"]),
+        "integrity": integrity_summary(run["rows"]),
+        "public_checks": public_checks(truth, run["observed"], archs),
+        "rows": run["rows"],
+    }
+
+
+def write_results(payload: dict, prefix: str = "correctness_") -> Path:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    path = RESULTS_DIR / f"correctness_{timestamp}.json"
+    path = RESULTS_DIR / f"{prefix}{payload['timestamp']}.json"
+    if path.exists():
+        raise FileExistsError(f"refusing to overwrite an existing result: {path.name}")
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
     return path
 
 
+REAL_CLI_HELP = """\
+Run the independent correctness evaluation against live Gemini.
+
+  python -m evaluation.correctness.evaluator --real
+
+Live mode uses the same ground truth and the same scorers as the offline run, with the real
+adapters. It runs the normal (no injected fault) mode for both architectures, needs GEMINI_API_KEY
+(or GEMINI_API_KEY_POOL) set in the environment or in .env, and fails with a message when neither
+is set. Results are written as evaluation/correctness/results/correctness_real_<timestamp>.json.
+
+Offline (no key, no network):  python -m evaluation.correctness.evaluator
+"""
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def main(argv: list[str]) -> int:
-    archs = ARCHS
-    if "--arch" in argv:
-        archs = (argv[argv.index("--arch") + 1],)
+    parser = argparse.ArgumentParser(description=REAL_CLI_HELP, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--real", action="store_true", help="run against live Gemini (normal mode, both architectures)")
+    parser.add_argument("--arch", choices=list(ARCHS), help="run one architecture only")
+    parser.add_argument("--modes", help="offline only: comma-separated subset of " + ",".join(MODES))
+    args = parser.parse_args(argv)
+
+    archs = (args.arch,) if args.arch else ARCHS
+    if args.real:
+        if args.modes:
+            parser.error("--real runs the normal mode only; fault modes are offline fault injections")
+        from dotenv import load_dotenv
+
+        load_dotenv(ROOT / ".env", override=False)
+        if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY_POOL")):
+            print("No Gemini key found. Set GEMINI_API_KEY (or GEMINI_API_KEY_POOL) in the environment or in .env.")
+            print("Nothing was called. Offline evaluation: python -m evaluation.correctness.evaluator")
+            return 2
+        modes = ("normal",)
+    else:
+        modes = tuple(args.modes.split(",")) if args.modes else MODES
+        unknown = set(modes) - set(MODES)
+        if unknown:
+            parser.error(f"unknown modes: {sorted(unknown)}")
+
     truth = load_ground_truth()
     problems = validate_ground_truth(truth)
     if problems:
         print("ground truth invalid:", *problems, sep="\n  ")
         return 1
-    run = evaluate(truth, archs=archs)
-    payload = {
-        "layer": "correctness (hand-authored ground truth; not the frozen-baseline regression)",
-        "timestamp": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
-        "git_revision": _git_revision(),
-        "ground_truth_sha256": truth["_sha256"],
-        "architectures": list(archs),
-        "modes": list(MODES),
-        "llm_call_contract": LLM_CALL_CONTRACT,
-        "mode_note": "offline stand-ins only; api_attempts is not measured (no HTTP)",
-        "summary": summarize(run["rows"]),
-        "public_checks": public_checks(truth, run["observed"], archs),
-        "rows": run["rows"],
-    }
-    path = write_results(payload)
-    print(f"wrote {path.relative_to(ROOT)}")
-    for arch, modes in payload["summary"].items():
+    try:
+        payload = run_real(truth, archs=archs, modes=modes) if args.real else run_offline(truth, archs=archs, modes=modes)
+    except EvaluationIntegrityError as exc:
+        print(f"integrity error, nothing written: {exc}")
+        return 1
+    path = write_results(payload, prefix="correctness_real_" if args.real else "correctness_")
+    print(f"wrote {_display_path(path)}")
+    print(f"transports: {payload['transports']}  live model called: {payload['live_model_called']}")
+    for arch, per_mode in payload["summary"].items():
         print(f"== {arch}")
         for mode in MODES:
-            if mode not in modes:
+            if mode not in per_mode:
                 continue
-            cells = modes[mode]
+            cells = per_mode[mode]
             failing = [d for d in DIMENSIONS if d != "d11_latency_ms" and cells[d]["scored"] and cells[d]["passed"] < cells[d]["scored"]]
             print(f"  {mode:10s} failing dimensions: {failing or 'none'}")
-        print(f"  boundary identity across modes: {modes['boundary_identity']}")
+        print(f"  boundary identity across modes: {per_mode['boundary_identity']}")
+    print("integrity:", payload["integrity"])
     print("public checks:", sum(1 for p in payload["public_checks"] if p["passed"]), "/", len(payload["public_checks"]), "passed")
-    return 0
+    return 1 if payload["integrity"]["attempt_mismatches"] or payload["integrity"]["faults_not_observed"] else 0
 
 
 if __name__ == "__main__":
