@@ -87,9 +87,6 @@ The first set of screenshots is from a live run on `REQ-1003`, a source-code-acc
 
 ![REQ-1005 vendor security missing and policy checks](docs/images/13_vendor_missing_evidence_req1005.png)
 
-**Degraded state (earlier build).** `REQ-1005` captured while the Gemini quota was exhausted. The product shows the documented safe state: `human_review_required`, deterministic policy fields, and every approval and risk flag still populated, not a crash or a fabricated recommendation:
-
-![Degraded state with human review required](docs/images/screenshot_reliability_req1005.jpg)
 
 ## Quick Start
 
