@@ -28,35 +28,8 @@ class ReplayGeminiClient:
         self._turn_index = 0
 
     def generate_turn(self, contents, tool_specs, system_instruction) -> ModelTurn:
-        if self._turn_index == 0:
-            self._turn_index += 1
-            calls = []
-            requester_id = self._raw.get("requester_id")
-            vendor_name = self._raw.get("vendor_name")
-            product_name = self._raw.get("product_name")
-            if requester_id:
-                calls.append(ToolCall(call_id="replay-1", name="get_employee_budget", arguments={"employee_id": requester_id}))
-            if vendor_name or product_name:
-                args = {}
-                if product_name:
-                    args["product_name"] = product_name
-                if vendor_name:
-                    args["vendor_name"] = vendor_name
-                if self._raw.get("category"):
-                    # Policy section 3 asks for the same product or vendor AND the same category.
-                    args["category"] = self._raw["category"]
-                calls.append(ToolCall(call_id="replay-2", name="search_catalog", arguments=args))
-            if vendor_name:
-                calls.append(ToolCall(call_id="replay-3", name="get_vendor_evidence", arguments={"vendor_name": vendor_name}))
-            if vendor_name or product_name:
-                history_args = {}
-                if product_name:
-                    history_args["product_name"] = product_name
-                if vendor_name:
-                    history_args["vendor_name"] = vendor_name
-                calls.append(ToolCall(call_id="replay-4", name="search_purchase_history", arguments=history_args))
-            return ModelTurn(function_calls=tuple(calls), text=None, raw_content=object())
-        self._turn_index += 1
+        # Evidence is gathered by the application before any model call, so the
+        # stand-in makes no supplemental tool calls.
         return ModelTurn(function_calls=(), text="", raw_content=object())
 
     def generate_analyst_report(self, contents, system_instruction) -> AnalystReport:
