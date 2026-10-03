@@ -81,6 +81,18 @@ with header_cols[3]:
     st.write("")
     run_clicked = st.button("Run analysis", type="primary", use_container_width=True)
 
+def _live_client(architecture):
+    """Direct Gemini when a Gemini key is set (the runner's default). Otherwise the OpenAI-compatible
+    adapter when CLOSEROUTER_API_KEY is set. Otherwise None, so the runner reports the missing key."""
+    import os
+
+    if os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY_POOL") or not os.environ.get("CLOSEROUTER_API_KEY"):
+        return None
+    from src.agent.closerouter_adapter import create_closerouter_client
+
+    return create_closerouter_client(staged=(architecture == "staged"))
+
+
 def _audit(status, result=None):
     """One audit record per analysis attempt. Records identifiers and policy fields only; errors by class name."""
     decision = result.decision if result is not None else None
@@ -105,7 +117,8 @@ if run_clicked:
     )
     with st.spinner(spinner_text):
         try:
-            result = run_with_timeout(lambda cancel: runner(request_id, cancel_event=cancel))
+            client = _live_client(architecture)
+            result = run_with_timeout(lambda cancel: runner(request_id, client=client, cancel_event=cancel))
             degraded = result.gemini_unavailable_reason
             _audit(f"degraded:{degraded}" if degraded else "ok", result)
             st.session_state.results[cache_key] = build_procurement_view(result)
