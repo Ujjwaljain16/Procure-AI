@@ -369,7 +369,7 @@ def test_production_run_refuses_fewer_than_both_architectures_or_fault_modes():
 
 def test_production_default_is_the_sample_on_both_architectures_with_a_descriptive_ab_view(monkeypatch):
     # Stand the production client on the fake SDK boundary: the sample logic is exercised, nothing is sent.
-    monkeypatch.setattr(ev, "_production_client", lambda arch: ev._fake_boundary_client(arch, [FakeGenaiTransport("normal", {})]))
+    monkeypatch.setattr(ev, "_production_client", lambda arch, provider="gemini": ev._fake_boundary_client(arch, [FakeGenaiTransport("normal", {})]))
     payload = ev.run_real(TRUTH, archs=ev.ARCHS, modes=("normal",))
     assert {r["case_id"] for r in payload["rows"]} == set(ev.REAL_SAMPLE_IDS)
     assert len(payload["rows"]) == len(ev.REAL_SAMPLE) * len(ev.ARCHS)

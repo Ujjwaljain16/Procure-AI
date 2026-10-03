@@ -285,6 +285,9 @@ def _evidence_key(item) -> tuple:
 
 OFFLINE_LABEL = "offline_stand_in"
 REAL_LABEL = "gemini_real"
+CLOSEROUTER_LABEL = "closerouter_real"  # live CloseRouter transport (OpenAI-compatible endpoint)
+LIVE_LABELS = (REAL_LABEL, CLOSEROUTER_LABEL)
+PROVIDERS = ("gemini", "closerouter")
 FAKE_BOUNDARY_LABEL = "gemini_fake_boundary"  # tests and self-checks only; never reached by the CLI
 
 
@@ -325,13 +328,38 @@ class _CountingTransport:
             raise
 
 
+class _CountingHttp:
+    """CloseRouter's HTTP boundary wrapped the same way: every POST is counted, and each failure is recorded by
+    class and status code, never message text."""
+
+    def __init__(self, inner):
+        self._inner = inner
+        self.calls = 0
+        self.error_codes: list[str] = []
+
+    def post(self, url, headers, json, timeout):
+        self.calls += 1
+        try:
+            response = self._inner.post(url, headers=headers, json=json, timeout=timeout)
+        except Exception as exc:
+            self.error_codes.append(f"{type(exc).__name__}:None")
+            raise
+        if getattr(response, "status_code", 200) >= 400:
+            self.error_codes.append(f"HTTP:{response.status_code}")
+        return response
+
+
 def _instrument(client) -> list:
     """Wrap each underlying transport of a real adapter (or each key of a pool). Returns the counters."""
     subs = client._clients if hasattr(client, "_clients") else [client]
     counters = []
     for sub in subs:
-        sub._client = _CountingTransport(sub._client)
-        counters.append(sub._client)
+        if hasattr(sub, "_http"):  # CloseRouter adapter: the HTTP object
+            sub._http = _CountingHttp(sub._http)
+            counters.append(sub._http)
+        else:
+            sub._client = _CountingTransport(sub._client)
+            counters.append(sub._client)
     return counters
 
 
@@ -348,7 +376,7 @@ def _info(label: str, counters: list) -> TransportInfo:
     )
 
 
-def real_factory(make_transports: Optional[Callable[[str, str, dict], list]] = None):
+def real_factory(make_transports: Optional[Callable[[str, str, dict], list]] = None, provider: str = "gemini"):
     """Transport for real-model runs.
 
     With ``make_transports`` None this is production: the real adapters are built from the environment
@@ -363,9 +391,9 @@ def real_factory(make_transports: Optional[Callable[[str, str, dict], list]] = N
         if make_transports is None:
             if mode != "normal":
                 raise ValueError(f"fault mode '{mode}' needs a fake transport; live runs are normal mode only")
-            client = _production_client(arch)
+            client = _production_client(arch, provider)
             counters = _instrument(client)
-            return client, _info(REAL_LABEL, counters)
+            return client, _info(CLOSEROUTER_LABEL if provider == "closerouter" else REAL_LABEL, counters)
         transports = make_transports(arch, mode, raw)
         client = _fake_boundary_client(arch, transports)
         counters = _instrument(client)
@@ -374,7 +402,11 @@ def real_factory(make_transports: Optional[Callable[[str, str, dict], list]] = N
     return factory
 
 
-def _production_client(arch: str):
+def _production_client(arch: str, provider: str = "gemini"):
+    if provider == "closerouter":
+        from src.agent.closerouter_adapter import create_closerouter_client
+
+        return create_closerouter_client(staged=(arch == "staged"))
     from src.agent.gemini_adapter import create_gemini_client
     from src.agent.staged_gemini_adapter import create_staged_gemini_client
 
@@ -383,6 +415,11 @@ def _production_client(arch: str):
 
 def _fake_boundary_client(arch: str, transports: list):
     """Build the real adapter (single key) or the real key pool (several keys), then replace only the HTTP object."""
+    if transports and hasattr(transports[0], "post"):  # CloseRouter-style HTTP boundary
+        from src.agent.closerouter_adapter import CloseRouterClient, CloseRouterStagedClient
+
+        cls = CloseRouterStagedClient if arch == "staged" else CloseRouterClient
+        return cls(api_key="fake-transport", http=transports[0])
     from src.agent.gemini_adapter import DEFAULT_MODEL, GeminiClient
     from src.agent.key_pool import PooledGeminiClient, PooledStagedGeminiClient
     from src.agent.staged_gemini_adapter import StagedGeminiClient
@@ -875,7 +912,7 @@ def _ab_cell(row: dict) -> dict:
     }
 
 
-def run_real(truth: dict, archs=ARCHS, modes=("normal",), case_ids: Optional[set] = None, make_transports=None) -> dict:
+def run_real(truth: dict, archs=ARCHS, modes=("normal",), case_ids: Optional[set] = None, make_transports=None, provider: str = "gemini") -> dict:
     """Real-model correctness run. The same ground truth, cases, and scorers as the offline run; only the
     transport differs. With make_transports None it is production: live Gemini, normal mode, both
     architectures, and only the REAL_SAMPLE cases."""
@@ -887,8 +924,11 @@ def run_real(truth: dict, archs=ARCHS, modes=("normal",), case_ids: Optional[set
             case_ids = set(REAL_SAMPLE_IDS)
         if not set(case_ids) <= REAL_SAMPLE_IDS:
             raise ValueError(f"live runs are limited to the sample; not sampled: {sorted(set(case_ids) - REAL_SAMPLE_IDS)}")
-    run = evaluate(truth, archs=archs, modes=modes, case_ids=case_ids, factory=real_factory(make_transports))
+    if provider not in PROVIDERS:
+        raise ValueError(f"unknown provider: {provider}")
+    run = evaluate(truth, archs=archs, modes=modes, case_ids=case_ids, factory=real_factory(make_transports, provider))
     payload = _payload(truth, run, archs, modes, layer="correctness, real-model transport (same ground truth and scorers as offline)")
+    payload["provider"] = provider
     if production:
         payload["sample"] = [{"case_id": c, "why_included": r} for c, r in REAL_SAMPLE]
         payload["ab_comparison"] = ab_comparison(run["rows"])
@@ -911,7 +951,7 @@ def _payload(truth: dict, run: dict, archs, modes, layer: str) -> dict:
         "worktree_clean": _worktree_clean(),
         "ground_truth_sha256": truth["_sha256"],
         "transports": labels,
-        "live_model_called": REAL_LABEL in labels,
+        "live_model_called": any(label in LIVE_LABELS for label in labels),
         "models": models,
         "architectures": list(archs),
         "modes": list(modes),
@@ -958,14 +998,20 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--real", action="store_true", help="run against live Gemini (normal mode, both architectures)")
     parser.add_argument("--arch", choices=list(ARCHS), help="run one architecture only")
     parser.add_argument("--modes", help="offline only: comma-separated subset of " + ",".join(MODES))
+    parser.add_argument("--provider", choices=list(PROVIDERS), default="gemini", help="live provider (with --real): gemini (default) or closerouter")
     args = parser.parse_args(argv)
 
     archs = (args.arch,) if args.arch else ARCHS
     if args.real:
         if args.modes or args.arch:
             parser.error("--real runs normal mode for both architectures on the live sample; faults are offline only")
-        if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY_POOL")):
-            print("No Gemini key found. Set GEMINI_API_KEY (or GEMINI_API_KEY_POOL) in the environment or in .env.")
+        if args.provider == "closerouter":
+            if not os.environ.get("CLOSEROUTER_API_KEY"):
+                print("No CloseRouter key found. Set CLOSEROUTER_API_KEY in the environment.")
+                print("Nothing was called. Offline evaluation: python -m evaluation.correctness.evaluator")
+                return 2
+        elif not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY_POOL")):
+            print("No Gemini key found. Set GEMINI_API_KEY (or GEMINI_API_KEY_POOL) in the environment.")
             print("Nothing was called. Offline evaluation: python -m evaluation.correctness.evaluator")
             return 2
         modes = ("normal",)
@@ -981,7 +1027,7 @@ def main(argv: list[str]) -> int:
         print("ground truth invalid:", *problems, sep="\n  ")
         return 1
     try:
-        payload = run_real(truth, archs=archs, modes=modes) if args.real else run_offline(truth, archs=archs, modes=modes)
+        payload = run_real(truth, archs=archs, modes=modes, provider=args.provider) if args.real else run_offline(truth, archs=archs, modes=modes)
     except EvaluationIntegrityError as exc:
         print(f"integrity error, nothing written: {exc}")
         return 1
