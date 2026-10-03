@@ -27,33 +27,34 @@ Question: are the decisions correct, and does the architecture withstand control
 - Limits: the expectations were written after some outputs were visible, and dimensions 1 and 2 classify the same structured fields as dimension 7. Recommendation free text is not scored offline.
 - One policy interpretation was adjudicated after the disagreement appeared (S-1007, `vendor_review_expired`). It is recorded in the case's `revision_log` and captured as an executable test, `test_conflicting_vendor_evidence_requires_security_but_not_expired_flag`.
 
-## 3. Real-model sample
+## 3. Real-model sample (final, pre-registered)
 
-Question: does the actual Gemini model behave acceptably on representative cases under the final architecture?
+Question: does the actual model behave acceptably on representative cases under the final architecture, and does B earn its cost?
 
-- Cases (fixed in code as `REAL_SAMPLE`, each with a stated reason): normal request with catalog overlap (S-1001); conflicting vendor evidence with an expired live review (S-1007); unknown vendor (S-UNK); customer PII with cross-region storage (S-1004); prompt injection in request text (S-INJ-REQ); threshold edge above $25,000 (S-B06); unavailable vendor-risk service (S-1009); incomplete request with an injected instruction (S-1006).
-- Setup: model `gemini-2.5-flash`; both architectures on the same eight cases; the same key pool for both; execution interleaved per case (A, then B), so both see the same quota conditions.
-- Final run: `evaluation/correctness/results/correctness_real_20261003T122905Z.json`, git revision `69e483d`, clean worktree. A partial earlier run (`121623Z`) is kept for audit only and must not be cited as the result.
+- **Cases:** sixteen, fixed in code as `REAL_SAMPLE` before the run. They include all six public cases (PUB-01 to PUB-06), overlap, conflicting and expired vendor evidence, unknown vendor, security and privacy, prompt injection in request and vendor text, the threshold edges, the unavailable vendor path, and an incomplete request.
+- **Model and provider:** Gemini 3.7 Flash (`google/gemini-3.7-flash`) through CloseRouter's OpenAI-compatible endpoint. The model was changed from `gemini-3-flash` by a dated amendment to the pre-registration, because the earlier route was unavailable at the provider.
+- **Decision rule:** committed in `docs/preregistration_b_rule.md` before the final run, with Amendment 1 for the model. It was not changed afterwards.
+- **Run:** `evaluation/correctness/results/correctness_real_20261003T142144Z.json`, git revision `07c5dd2`, clean worktree, provider `closerouter`. Both architectures ran on the same cases, interleaved per case.
 
-Results per architecture:
+Results:
 
 | | Architecture A | Architecture B |
 |---|---|---|
-| Cases completed | 5 of 8 | 5 of 8 |
-| Cases failed from provider quota | 3 (S-UNK, S-INJ-REQ, S-B06) | 3 (the same three) |
-| Recommendation class matches ground truth (completed cells) | 5 of 5 | 5 of 5 |
-| Boundary identity (policy fields equal to normal run) | 8 of 8 cases | 8 of 8 cases |
-| Logical LLM calls, completed cells | 2 typical | about 5 typical |
-| Actual HTTP attempts, checked against the transport | 16 checked, 0 mismatches | (same check) |
-| Tool calls, completed cells | 4 in four cells, 8 in one | 8 in all five cells |
-| Median latency, completed cells | about 9 s | about 30 s |
+| Comparable cases (no provider failure) | 16 of 16 | 16 of 16 |
+| Recommendation and next action correct (primary) | 16 of 16 | 16 of 16 |
+| Evidence grounded (secondary) | 16 of 16 | 16 of 16 |
+| Regressions against A (deterministic and safety) | not applicable | none |
+| Median latency | 18.2 s | 24.4 s |
+| Median logical LLM calls | 3 | 4 |
+| Attempts checked against the HTTP count | 32 of 32 match, 0 mismatches | (same run) |
 
-Notes:
+**Rule outcome.** B showed no improvement and no regression, so the rule selects Architecture A.
 
-- **Quota.** The provider returned 19 HTTP 429 responses. Most were absorbed by key rotation, and the calls then succeeded. Six cells ended with no answer, all for both architectures. These are provider-quota failures, not architecture failures.
-- **Tool-call behaviour.** The offline contract assumes four tool calls for a normal run. The live model issued supplemental lookups, mostly in B. Those lookups are identity-bound and cannot change the policy fields; boundary identity still held in every cell.
-- **Public checks.** PUB-01, PUB-05, and PUB-06 pass for both architectures. PUB-02, PUB-03, and PUB-04 are not executed because their cases are outside the eight-case sample.
-- **Statistics.** Eight cases, one run, no significance claim. These numbers are descriptive.
+**Notes.**
+- The live model issued supplemental tool lookups in both architectures, which the offline contract did not predict. Those lookups are identity-bound and cannot change any policy field.
+- Sixteen cases and one run are descriptive. No significance claim is made.
+- Earlier live attempts are indexed in `evaluation/correctness/results/INDEX.md`. The archived attempts that ended in provider outage are not results.
+- An earlier eight-case run on direct Gemini (`correctness_real_20261003T122905Z.json`, revision `69e483d`) is kept as history. It is not the final result.
 
 ## 4. What each layer supports
 

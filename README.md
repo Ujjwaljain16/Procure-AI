@@ -2,7 +2,7 @@
 
 An internal procurement decision-support tool: an employee submits a software or service request, the system gathers evidence with code the model cannot influence, applies deterministic company policy, and recommends a next action. Every approval stays with a human. Built for the FDE Assessment 3 brief.
 
-> **Status of the evidence.** The deterministic authority boundary and policy behaviour are extensively tested offline. A real-model sample of eight cases was run once against both architectures; it is descriptive, not statistically significant. That live run is the final empirical validation step we ran, and its limits are stated below.
+> **Status of the evidence.** The deterministic authority boundary and policy behaviour are extensively tested offline. A pre-registered real-model sample of sixteen cases was run once against both architectures; it is descriptive, not statistically significant. Its result and limits are stated below.
 
 ## Navigation
 
@@ -66,8 +66,10 @@ $env:GEMINI_API_KEY = "your-key-here"
 export GEMINI_API_KEY="your-key-here"
 
 # optional
-export GEMINI_MODEL=gemini-2.5-flash
+export GEMINI_MODEL=gemini-2.5-flash   # direct Gemini; the live CloseRouter run uses CLOSEROUTER_MODEL
 ```
+
+For the live evaluation, the product also supports Gemini models through [CloseRouter](https://closerouter.dev), an OpenAI-compatible endpoint. Set `CLOSEROUTER_API_KEY` in the environment, and optionally `CLOSEROUTER_MODEL` (default `google/gemini-3.7-flash`). The live evaluator is run with `python evaluation/correctness/evaluator.py --real --provider closerouter`.
 
 `.env.example` documents the variables. Copying it does nothing unless you set the same variables in the environment.
 
@@ -87,7 +89,7 @@ This starts the mock vendor-risk API on `http://127.0.0.1:8001` and the Streamli
 - **Two architectures, one boundary.** A (single agent) is the recommended default. B (analyst then reviewer) is retained as an evaluated alternative. Both use the same evidence preflight, policy engine, and validator. See `docs/architecture_decision.md`.
 - **Vendor mock.** It has no authentication and must stay on `127.0.0.1`. The evaluation serves the same records in-process, so it does not depend on the mock running.
 - **Stopping the app (Windows).** Ctrl+C in the `run_local.py` terminal stops both the mock and the UI.
-- **Recommendation quality is not measured by the offline evaluation.** The live sample describes real-model behaviour on eight cases only. See the evaluation section.
+- **Recommendation quality is not measured by the offline evaluation.** The live sample describes real-model behaviour on sixteen cases in one run only. See the evaluation section.
 
 ## Gemini keys and quota
 
@@ -159,25 +161,23 @@ The evaluation has four layers, kept separate so that no layer is read as eviden
 
 1. **Historical frozen replay — regression only.** The frozen 25-case set (`evaluation/cases.json`), run through both architectures with a deterministic stand-in model. Used to detect unexpected behaviour changes. Its expectations are historical, not a correctness oracle.
 2. **Independent correctness — offline.** Hand-authored ground truth for 26 cases (`evaluation/correctness/ground_truth.json`), scored on 13 dimensions across normal, hostile, malformed, and outage modes for both architectures. Self-checked against deliberately broken behaviour.
-3. **Real-model sample.** Eight representative cases, both architectures, interleaved per case on the same key pool, with the real Gemini model.
+3. **Real-model sample.** Sixteen pre-registered cases, both architectures, interleaved per case, on Gemini 3.7 Flash through CloseRouter. The rule was committed before the run.
 4. **Unit and integration tests.** The full suite under `tests/`.
 
 ## Results
 
-| | Result |
+| Evidence | Result |
 |---|---|
-| Automated test suite | 691 passed, 1 skipped, 8 expected failures |
-| Frozen replay, post-hardening | 25/25 expected checks, both architectures; zero deterministic differences between A and B |
-| Offline correctness, 26 cases × 4 modes × 2 architectures | No failing dimensions; deterministic outputs identical to the normal run in 104 of 104 runs per architecture; 12/12 public checks |
-| Real-model sample, 8 cases, run `correctness_real_20261003T122905Z.json` | Recommendation class matched ground truth in all 10 completed cells; boundary identity held in all 16 cells; 6 cells failed on provider quota (HTTP 429), for both architectures |
+| Automated test suite | 764 passed, 1 skipped, 8 expected failures (adapter branch) |
+| Frozen replay, post-hardening (25 cases) | 25/25 expected checks for both architectures; zero deterministic differences between A and B |
+| Offline correctness (26 cases × 4 modes × 2 architectures) | No failing dimensions; deterministic outputs identical to the normal run in 104 of 104 runs per architecture; 12/12 public checks |
+| **Final live run, pre-registered (16 cases, Gemini 3.7 Flash via CloseRouter), `correctness_real_20261003T142144Z.json`** | 16 comparable cases, no provider failures. A and B both 16/16 on recommendation and next action; both 16/16 on evidence grounding; no regression in B. Median latency A 18.2 s, B 24.4 s; median logical calls A 3, B 4 |
 
-Live-run notes:
+**Rule outcome.** The decision rule was committed before the final run and is in [`docs/preregistration_b_rule.md`](docs/preregistration_b_rule.md). B showed no improvement over A and no regression. The rule therefore selects Architecture A.
 
-- **B cost.** On completed cells B made about twice the logical LLM calls of A (about five against two) and about three times the median latency (about 30 s against about 9 s). B also issued supplemental tool lookups in every completed cell.
-- **Quota.** The provider returned 19 HTTP 429 responses. Most were absorbed by key rotation. Six cells ended with no answer, for both architectures. These are provider failures, not architecture failures.
-- **Scope.** Eight cases, one run. No statistical significance is claimed; the numbers are descriptive.
+**Limits.** The live result is one run of 16 cases. It is descriptive and makes no significance claim. The live model issued supplemental tool lookups in both architectures, which the offline contract did not predict.
 
-Partial live run `correctness_real_20261003T121623Z.json` is kept for audit only and is not the result.
+Earlier live runs are indexed in `evaluation/correctness/results/INDEX.md`. The Gemini sample `correctness_real_20261003T122905Z.json` is an earlier eight-case run on direct Gemini. Failed attempts are archived and are not results.
 
 ## Edge Case Coverage
 
@@ -194,7 +194,7 @@ The brief's six required edge cases, with the cases that exercise them:
 
 ## Architecture Decision
 
-**Recommended: ship Architecture A as the default; keep Architecture B as an evaluated alternative.** Both architectures share the authoritative boundary, so the question is only whether B's extra orchestration earns its cost. In this evidence it does not: both matched the ground truth and kept identical policy fields, while B cost roughly twice the calls and three times the latency. The full reasoning and the conditions for revisiting B are in [`docs/architecture_decision.md`](docs/architecture_decision.md).
+**Ship Architecture A as the default.** Both architectures share the authoritative boundary, so the question is whether B's extra orchestration earns its cost. The pre-registered rule says it did not: in the final live run both matched the ground truth on every case, and B was slower and made one more call per case. The full reasoning and the conditions for revisiting B are in [`docs/architecture_decision.md`](docs/architecture_decision.md).
 
 ## Assumptions
 
@@ -210,7 +210,7 @@ The brief's six required edge cases, with the cases that exercise them:
 
 ## Known Limitations
 
-- **Live evidence is small.** Eight cases, one run, descriptive only. Six cells failed on provider quota for both architectures.
+- **Live evidence is small.** The final live run is one run of 16 cases, descriptive only. The live model made supplemental tool lookups in both architectures.
 - **Prompt-injection visibility is pattern-based.** It is a visibility signal, not a complete defense. Paraphrased attacks may evade it.
 - **Recommendation text is not scored offline.** Offline dimensions classify structured fields; free text is checked only for unqualified approval claims.
 - **Dimensions 1 and 2 overlap dimension 7.** They classify the same structured fields.

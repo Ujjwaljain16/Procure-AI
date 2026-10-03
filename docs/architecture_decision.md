@@ -1,21 +1,21 @@
 # Architecture decision
 
-**Decision (recommended):** Ship Architecture A as the default. Keep Architecture B in the codebase as an evaluated alternative, selectable but not the default.
+**Decision: Ship Architecture A as the default.** Keep Architecture B in the codebase as an evaluated alternative, selectable but not the default. The rule that decided this was written and committed before the final live run (`docs/preregistration_b_rule.md`).
 
-**Why this decision rests on the evidence**
+**Why the decision rests on the evidence**
 
-Both architectures now share one authoritative path: a validated request, the deterministic evidence preflight, the deterministic policy engine, the validator, and human handoff. The model cannot choose the evidence the policy uses. The architectures differ only in orchestration: A is one agent; B is an analyst followed by a reviewer.
+Both architectures share one authoritative path: a validated request, the deterministic evidence preflight, the deterministic policy engine, the validator, and human handoff. The model cannot choose the evidence the policy uses. The architectures differ only in orchestration: A is one agent; B is an analyst followed by a reviewer.
 
 So the question is whether B's extra orchestration produces a measurable benefit that justifies its cost.
 
-- **Correctness, offline (26 cases, four fault modes).** Both architectures pass every scored dimension, and their deterministic outputs are identical across normal, hostile, malformed, and outage runs (104 of 104 runs for each architecture). Offline evaluation can't separate them on correctness, because the policy path is shared.
-- **Correctness, live (8 cases, one run).** On the 10 cells that completed, both architectures matched the hand-authored recommendation class and kept every policy field identical to the normal run. No quality advantage for B appears.
-- **Cost, live.** On the completed cells, B made about twice the logical LLM calls of A (about 5 against 2) and roughly three times the median latency (about 30 s against 9 s). B also issued four supplemental tool lookups where A issued none in most cases, which the offline contract did not predict.
+- **Offline correctness (26 cases, four fault modes).** Both architectures pass every scored dimension, and their deterministic outputs are identical across normal, hostile, malformed, and outage runs (104 of 104 runs per architecture). Offline evaluation cannot separate them on correctness, because the policy path is shared.
+- **Live, final run (16 cases, one run, Gemini 3.7 Flash through CloseRouter).** All 16 cases were comparable, with no provider failures. A and B each matched the ground truth on recommendation and next action in 16 of 16 cases, and each grounded its evidence in 16 of 16 cases. B had no regressions against A in any deterministic or safety dimension.
+- **Cost.** B's median latency was 24.4 s against 18.2 s for A. B made one more logical model call per case (median 4 against 3).
 
-**What this does not show.** The live sample has eight cases and one run. Six cells failed on provider quota (HTTP 429) for both architectures; that reflects the provider stopping service, not either architecture. No statistical significance is claimed, and a single run cannot rule out a quality difference that a larger sample would reveal.
+**Rule outcome.** The pre-registered rule required B to show at least two more successful cases, or ten percentage points more, on the primary or secondary metric, with no regression. B showed zero more successes and no regressions, so the rule selects A.
 
-**Why A is the default.** B adds two model stages, more calls, more latency, and more tool traffic, and in this evidence it buys no measurable quality. A reaches the same policy-compliant outcomes with fewer moving parts, so it is the simpler system to operate and to audit. A is also the path whose deterministic guarantees are tested most directly.
+**What this does not show.** Sixteen cases and one run cannot establish statistical significance, and no significance claim is made. The live model also issued supplemental tool lookups in both architectures, which the offline contract did not predict. Recommendation text is not scored by the offline evaluator.
 
-**Conditions to revisit.** Re-evaluate B if a larger live sample shows a repeatable quality gain on recommendation or evidence grounding, or if a future policy needs a reviewer stage that a single agent cannot provide cleanly. Until then, B stays as an evaluated alternative rather than a shipped default.
+**Conditions to revisit.** Re-evaluate B if a larger live sample shows a repeatable gain on recommendation or evidence grounding, or if a future policy needs a separate reviewer stage that a single agent cannot provide cleanly.
 
-**Limits to state with the result.** Prompt-injection visibility is a deterministic, pattern-based signal, and it is not a complete defense; paraphrased attacks may evade it. Recommendation text is not scored by the offline evaluation. Live results are descriptive.
+**Limits to state with the result.** Prompt-injection visibility is a deterministic, pattern-based signal, and it is not a complete defense; paraphrased attacks may evade it.
