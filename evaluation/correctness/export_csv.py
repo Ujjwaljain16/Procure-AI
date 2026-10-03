@@ -1,6 +1,6 @@
 """Export a correctness result JSON as one CSV row per case and architecture.
 
-The columns follow the submission template (templates/evaluation_results_template.csv):
+The columns follow the submission results format:
 
     case_id, architecture, correct_next_action, grounded_evidence, policy_followed,
     human_escalation_correct, latency_ms, llm_calls, tool_calls, notes
