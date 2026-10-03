@@ -18,6 +18,8 @@ jobs:
           python -m pip install -r requirements.lock
       - name: Secrets preflight
         run: python scripts/preflight_secrets.py
+      - name: Documentation consistency
+        run: python scripts/check_docs.py
       - name: Start the local vendor-risk mock (loopback only)
         run: |
           python -m uvicorn mock_api.app:app --host 127.0.0.1 --port 8001 &

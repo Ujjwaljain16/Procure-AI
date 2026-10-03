@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import signal
 import subprocess
 import sys
@@ -11,6 +12,20 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env", override=False)
+
+
+LOOPBACK = "127.0.0.1"
+ALLOW_EXTERNAL_ENV = "PROCUREAI_ALLOW_EXTERNAL"
+
+
+def ui_bind_address(env: dict | None = None) -> str:
+    """The UI has no authentication, so it binds to loopback unless the operator explicitly opts in."""
+    env = os.environ if env is None else env
+    return "0.0.0.0" if env.get(ALLOW_EXTERNAL_ENV) == "1" else LOOPBACK
+
+
+def streamlit_command(env: dict | None = None) -> list[str]:
+    return [sys.executable, "-m", "streamlit", "run", "app.py", "--server.address", ui_bind_address(env), "--server.port", "8501"]
 
 
 def start(cmd: list[str]) -> subprocess.Popen:
@@ -85,20 +100,13 @@ def main() -> None:
             print("Streamlit is not installed. Run: pip install -r requirements.txt")
             print("The mock API is still running. Press Ctrl+C to stop.")
         else:
-            print("Starting starter UI on http://127.0.0.1:8501 ...")
-            procs.append(
-                start(
-                    [
-                        sys.executable,
-                        "-m",
-                        "streamlit",
-                        "run",
-                        "app.py",
-                        "--server.port",
-                        "8501",
-                    ]
+            if ui_bind_address() != LOOPBACK:
+                print(
+                    f"WARNING: {ALLOW_EXTERNAL_ENV}=1 -- the UI is bound to {ui_bind_address()} and has NO authentication. "
+                    "Put an authenticating reverse proxy in front of it."
                 )
-            )
+            print(f"Starting starter UI on http://{LOOPBACK}:8501 (bound to {ui_bind_address()}) ...")
+            procs.append(start(streamlit_command()))
 
         while True:
             time.sleep(1)

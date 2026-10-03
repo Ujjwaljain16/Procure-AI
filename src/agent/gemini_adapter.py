@@ -23,6 +23,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Optional, Protocol, Sequence
 
+from src.agent.attempts import record_attempt
 from src.agent.schemas import AgentSynthesis
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,10 @@ class GeminiClientProtocol(Protocol):
     """The interface src/agent/single_agent.py depends on. Tests implement
     this directly with canned responses instead of touching the real SDK."""
 
+    @property
+    def model_name(self) -> str:
+        return self._model
+
     def generate_turn(self, contents: list, tool_specs: Sequence, system_instruction: str) -> ModelTurn: ...
 
     def generate_structured(self, contents: list, system_instruction: str) -> AgentSynthesis: ...
@@ -100,6 +105,7 @@ class GeminiClientProtocol(Protocol):
 
 
 class GeminiClient:
+    counts_api_attempts = True
     """Real implementation backed by ``google.genai.Client``. The SDK import
     is deferred to ``__init__`` so importing this module (and everything that
     imports it) never requires the ``google-genai`` package to be installed
@@ -114,6 +120,10 @@ class GeminiClient:
         self._client = genai.Client(api_key=api_key, http_options={"timeout": int(timeout_s * 1000)})
         self._model = model
 
+    @property
+    def model_name(self) -> str:
+        return self._model
+
     def generate_turn(self, contents: list, tool_specs: Sequence, system_instruction: str) -> ModelTurn:
         from google.genai import types
 
@@ -126,6 +136,7 @@ class GeminiClient:
                 types.AutomaticFunctionCallingConfig(disable=True) if tool else None
             ),
         )
+        record_attempt()
         response = self._client.models.generate_content(model=self._model, contents=contents, config=config)
         return self._to_model_turn(response)
 
@@ -138,6 +149,7 @@ class GeminiClient:
             response_mime_type="application/json",
             response_schema=AgentSynthesis,
         )
+        record_attempt()
         response = self._client.models.generate_content(model=self._model, contents=contents, config=config)
         parsed = getattr(response, "parsed", None)
         if isinstance(parsed, AgentSynthesis):
@@ -186,7 +198,9 @@ class GeminiClient:
             if name:
                 calls.append(ToolCall(call_id=str(call_id), name=name, arguments=args))
 
-        text = getattr(response, "text", None)
+        # The SDK warns when .text is read from a response that contains
+        # function calls, so only read it for a plain text answer.
+        text = None if calls else getattr(response, "text", None)
         raw_content = None
         candidates = getattr(response, "candidates", None) or []
         if candidates:

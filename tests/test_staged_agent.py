@@ -6,7 +6,9 @@ none makes a real Gemini API call or requires GEMINI_API_KEY.
 
 from __future__ import annotations
 
+from src import data_access
 from src.agent.gemini_adapter import ModelOutputError
+from src.evidence import gather_mandatory_evidence
 
 import requests
 
@@ -29,8 +31,12 @@ def _analyst_report(**overrides) -> AnalystReport:
     return AnalystReport(**defaults)
 
 
+def _preflight_calls(request_id: str) -> int:
+    return gather_mandatory_evidence(data_access.get_request_validated(request_id)).call_count
+
+
 class TestAnalystToolSelectionAndExecution:
-    def test_analyst_calls_tools_and_collects_evidence(self):
+    def test_analyst_supplemental_calls_add_evidence_on_top_of_the_preflight(self):
         client = ScriptedStagedGeminiClient(
             turns=[
                 tool_turn(
@@ -42,12 +48,14 @@ class TestAnalystToolSelectionAndExecution:
             analyst_report=_analyst_report(evidence_refs=["E1", "E2", "E3", "E4"]),
             structured_result=_synthesis(evidence_refs=["E1"]),
         )
+        baseline = run_staged_agent_with_trace("REQ-1001", client=ScriptedStagedGeminiClient(turns=[stop_turn()], analyst_report=_analyst_report(), structured_result=_synthesis()))
         result = run_staged_agent_with_trace("REQ-1001", client=client)
 
-        assert result.registry.call_count == 2
-        assert len(result.registry.all_evidence()) == 4  # employee(2) + vendor(2)
+        # the preflight is always made; the analyst's two calls are supplemental and recorded after it
+        assert result.registry.call_count == _preflight_calls("REQ-1001") + 2
+        assert len(result.registry.all_evidence()) > len(baseline.registry.all_evidence())
         assert result.analyst_report is not None
-        assert result.decision.telemetry.tool_calls == 2
+        assert result.decision.telemetry.tool_calls == _preflight_calls("REQ-1001") + 2
 
     def test_analyst_llm_calls_include_tool_turns_and_the_report_call(self):
         client = ScriptedStagedGeminiClient(
@@ -72,7 +80,7 @@ class TestAnalystBoundedBehavior:
         )
         result = run_staged_agent_with_trace("REQ-1001", client=client)
         assert client.turn_calls == 2  # stops after the redundant second turn
-        assert result.decision.telemetry.tool_calls == 2
+        assert result.decision.telemetry.tool_calls == _preflight_calls("REQ-1001") + 2
 
 
 class TestAnalystMalformedOutput:

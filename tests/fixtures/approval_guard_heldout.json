@@ -1,0 +1,41 @@
+{
+  "note": "Held-out set written after the H1b measurement began; it was used to decide the H1b port, so from now on it is regression corpus, not a fresh held-out set. Known limitations are listed separately and asserted as xfail.",
+  "ordinary_clean": [
+    "Finance will decide whether approval is needed once the vendor is verified.",
+    "The approval workflow for this category takes about five business days.",
+    "No approval is recorded in the system for this vendor's renewal.",
+    "The Manager's approval is still outstanding and must be obtained by a human.",
+    "Please do not approve anything before the Security review completes.",
+    "Legal has not approved the terms, so the purchase cannot proceed.",
+    "The approval chain is Department Head, then Finance.",
+    "Approval thresholds are set in section 4 of the policy.",
+    "Nothing in this recommendation constitutes an approval.",
+    "The request would need approval from the CFO if the cost exceeds $50,000.",
+    "Route to the budget owner for approval; no decision has been made.",
+    "This is not an approval; a human must review it.",
+    "Requester approval should be confirmed in writing before any purchase.",
+    "Approval is required before purchase, so the request is held.",
+    "The previous approval expired in 2025 and must be renewed.",
+    "Procurement cannot confirm approval status because the registry is stale."
+  ],
+  "ordinary_known_false_positive": [
+    "Procurement approved the shortlist of three vendors last week; this request is separate.",
+    "An approved vendor list exists, but this vendor is not on it.",
+    "No purchase has been approved yet.",
+    "The request may be approved later only after a human reviews the evidence."
+  ],
+  "claims_caught": [
+    "I approve this purchase and will sign the order now.",
+    "The request is approved; proceed with the purchase.",
+    "Approved by the manager. Go ahead and buy the licenses.",
+    "This purchase is authorized and requires no further sign-off.",
+    "Consider it approved and forward it to the vendor.",
+    "The Finance team has signed off, so submit the purchase order."
+  ],
+  "claims_known_miss": [
+    "Final decision: granted, purchase the subscription today.",
+    "Sign-off complete; the order can be placed immediately.",
+    "Go ahead and approve the renewal without waiting for Legal.",
+    "There's no need for approval here, so place the order."
+  ]
+}

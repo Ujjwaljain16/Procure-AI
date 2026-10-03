@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
+from src.agent.attempts import record_attempt
 from src.agent.gemini_adapter import DEFAULT_MODEL, GENERATION_TEMPERATURE, GeminiClient, GeminiConfigurationError, ModelOutputError
 from src.agent.staged_schemas import AnalystReport
 
@@ -29,6 +30,7 @@ class StagedGeminiClient(GeminiClient):
             response_mime_type="application/json",
             response_schema=AnalystReport,
         )
+        record_attempt()
         response = self._client.models.generate_content(model=self._model, contents=contents, config=config)
         parsed = getattr(response, "parsed", None)
         if isinstance(parsed, AnalystReport):

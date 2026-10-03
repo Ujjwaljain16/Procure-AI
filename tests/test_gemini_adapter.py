@@ -20,6 +20,7 @@ from src.agent.gemini_adapter import GeminiClient, GeminiConfigurationError, cre
 class TestCreateGeminiClient:
     def test_raises_when_api_key_missing(self, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY_POOL", raising=False)
         with pytest.raises(GeminiConfigurationError):
             create_gemini_client()
 
@@ -35,12 +36,14 @@ class TestCreateGeminiClient:
 
     def test_uses_default_model_when_unset(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "test-key-not-real")
+        monkeypatch.delenv("GEMINI_API_KEY_POOL", raising=False)
         monkeypatch.delenv("GEMINI_MODEL", raising=False)
         client = create_gemini_client()
         assert client._model == "gemini-2.5-flash"
 
     def test_respects_explicit_model_override(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "test-key-not-real")
+        monkeypatch.delenv("GEMINI_API_KEY_POOL", raising=False)
         monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
         client = create_gemini_client()
         assert client._model == "gemini-2.5-flash"

@@ -51,8 +51,9 @@ class TestNormalRecommendationRenders:
         assert view.error_banner is None
         assert view.recommendation == "Proceed with manager approval."
         assert "Manager" in view.required_approvals
-        # employee_budget (2 items) + vendor evidence (2 items: registry + service)
-        assert len(view.evidence) == 4
+        # the view lists every retrieved item: the preflight's (budget, catalog, history, vendor) plus the model's supplemental lookups
+        assert len(view.evidence) == len(result.registry.all_evidence())
+        assert len(view.evidence) > 0
         assert view.rationale == "Based on the evidence provided."
 
 
@@ -315,7 +316,9 @@ class TestVendorSecurityPanel:
         assert view.vendor_security is not None
         assert view.vendor_security.overall_status == "verified"
 
-    def test_no_vendor_evidence_retrieved_means_no_panel(self):
+    def test_vendor_check_is_always_made_so_an_unanswering_service_renders_unavailable_not_hidden(self):
+        # The preflight always consults the vendor service, even if the model never asks. With the
+        # service unreachable (the suite's default), the panel must say so, never disappear.
         client = ScriptedGeminiClient(
             turns=[tool_turn(tool_call("get_employee_budget", employee_id="E004")), stop_turn()],
             structured_result=_synthesis(evidence_refs=["E1"]),
@@ -323,7 +326,8 @@ class TestVendorSecurityPanel:
         result = run_single_agent_with_trace("REQ-1001", client=client)
         view = build_procurement_view(result)
 
-        assert view.vendor_security is None
+        assert view.vendor_security is not None
+        assert view.vendor_security.overall_status == "unavailable"
 
 
 class TestConstraintsSummary:
@@ -427,21 +431,23 @@ class TestLifecycleView:
 
 
 class TestMalformedOrEmptyResultDoesNotCrash:
-    def test_zero_tool_calls_and_no_synthesis_still_produces_a_valid_view(self):
+    def test_no_model_calls_and_no_synthesis_still_produces_a_valid_view(self):
         client = ScriptedGeminiClient(turns=[stop_turn()], structured_result=None)
         result = run_single_agent_with_trace("REQ-1001", client=client)
         view = build_procurement_view(result)  # must not raise
 
-        assert view.evidence == ()
-        assert view.policy_checks  # policy still ran even with no evidence
-        assert view.tool_calls == ()
+        # the preflight still ran, so the view lists its evidence and attempts even though the model did nothing
+        assert len(view.evidence) == len(result.registry.all_evidence())
+        assert view.policy_checks  # policy still ran
+        assert len(view.tool_calls) == len(result.registry.execution_log)
         assert view.audit_timeline  # still a full ordered list, just marked skipped
 
     def test_synthesis_citing_nothing_still_renders(self):
         client = ScriptedGeminiClient(turns=[stop_turn()], structured_result=_synthesis(evidence_refs=[]))
         result = run_single_agent_with_trace("REQ-1001", client=client)
         view = build_procurement_view(result)
-        assert view.evidence == ()
+        # no citations, yet the view still shows the evidence that was gathered
+        assert len(view.evidence) == len(result.registry.all_evidence())
         assert view.recommendation
 
 

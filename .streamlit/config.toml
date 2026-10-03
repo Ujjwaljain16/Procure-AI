@@ -1,2 +1,4 @@
 [server]
 headless = true
+# Loopback only: the app has no authentication. run_local.py (PROCUREAI_ALLOW_EXTERNAL=1) is the explicit opt-in.
+address = "127.0.0.1"

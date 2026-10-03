@@ -65,7 +65,10 @@ class TestGeminiFailureWordingNeverLeaksRawNames:
         assert result.decision.human_review_required is True
 
     def test_missing_api_key_recommendation_is_clean(self, monkeypatch):
+        # Clear both key variables: with a pool variable set, the runner would build a pooled production
+        # client instead of taking the missing-key path this test is about.
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY_POOL", raising=False)
         result = run_single_agent_with_trace("REQ-1001")
         assert "GeminiConfigurationError" not in result.decision.recommendation
 

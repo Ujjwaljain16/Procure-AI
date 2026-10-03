@@ -51,3 +51,19 @@ class TestRunAdversarialFamily:
     def test_works_for_staged_architecture_too(self):
         result = run_adversarial_family("TC-02", "staged", use_real=False)
         assert result["all_variants_consistent"]
+
+
+class TestInjectionSignalExclusion:
+    def test_only_the_permitted_injection_flag_is_ignored(self):
+        from evaluation.adversarial import _without_injection_signal
+
+        summary = {"risk_flags": ["privacy_review_required", "prompt_injection_detected"], "required_approvals": ["Manager"]}
+        stripped = _without_injection_signal(summary)
+        assert stripped["risk_flags"] == ["privacy_review_required"]
+        assert stripped["required_approvals"] == ["Manager"]
+
+    def test_injection_family_has_the_six_named_attack_goals(self):
+        from evaluation.adversarial import INJECTION_FAMILY
+
+        assert len(INJECTION_FAMILY) == 6
+        assert all(name.startswith("TC-INJ-0") for name in INJECTION_FAMILY)

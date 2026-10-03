@@ -17,6 +17,10 @@ class RunTelemetry(BaseModel):
     tool_names: list[str] = Field(default_factory=list)
     architecture: str | None = None
     latency_ms: float | None = None
+    # Real HTTP attempts made to the model API during this run (None for non-API clients such as test
+    # fakes). Differs from llm_calls whenever a key pool rotated past an exhausted/overloaded key.
+    api_attempts: int | None = None
+    model: str | None = None
 
 
 class ProcurementDecision(BaseModel):

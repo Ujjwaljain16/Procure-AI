@@ -27,6 +27,18 @@ from src.contracts import EvidenceItem
 from src.policy_engine import CatalogMatch, to_decimal
 
 
+def _squash(value: object) -> str:
+    """Retrieval normalization: lower-case and drop every non-alphanumeric character, so
+    'E-signature', 'e signature' and 'esignature' compare equal. Equality only -- never
+    containment or similarity.
+
+    A blank value (None, or the NaN pandas uses for an empty CSV cell) normalizes to "" -- never to the
+    text "nan"/"none", which a query could then match."""
+    if value is None or pd.isna(value):
+        return ""
+    return "".join(ch for ch in str(value).lower() if ch.isalnum())
+
+
 def _normalize(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
@@ -78,12 +90,13 @@ def search_catalog(
 
     catalog = data_access.load_software_catalog()
     mask = pd.Series(False, index=catalog.index)
-    if product_name:
-        mask |= catalog["product_name"].str.strip().str.lower() == _normalize(product_name)
-    if vendor_name:
-        mask |= catalog["vendor_name"].str.strip().str.lower() == _normalize(vendor_name)
-    if category:
-        mask |= catalog["category"].str.strip().str.lower() == _normalize(category)
+    # An empty normalized query (e.g. "!!!" or whitespace) matches nothing: it must not match blank cells.
+    if _squash(product_name):
+        mask |= catalog["product_name"].map(_squash) == _squash(product_name)
+    if _squash(vendor_name):
+        mask |= catalog["vendor_name"].map(_squash) == _squash(vendor_name)
+    if _squash(category):
+        mask |= catalog["category"].map(_squash) == _squash(category)
 
     # sort by software_id for a stable, deterministic, repeatable ordering
     matched_rows = catalog[mask].sort_values("software_id")

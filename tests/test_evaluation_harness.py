@@ -155,13 +155,23 @@ class TestRunCaseForEveryFrozenCase:
         assert check_deterministic_fields_match(actual, actual) == []
 
 
-class TestReplayToolPlan:
-    def test_replay_plan_includes_purchase_history_when_a_product_is_named(self):
+class TestMandatoryPlanIsCodeOwned:
+    """The replay stand-in makes no tool calls: the application's preflight owns the lookups.
+    These tests check the preflight plan that replaced the old model-driven plan."""
+
+    def test_preflight_includes_purchase_history_when_a_product_is_named(self):
+        from src.evidence import gather_mandatory_evidence
+
         raw = {"requester_id": "E004", "vendor_name": "SignFlow", "product_name": "SignFlow Add-on"}
-        turn = ReplayGeminiClient(raw).generate_turn([], [], "")
-        names = [c.name for c in turn.function_calls]
+        names = [r.tool_name for r in gather_mandatory_evidence(raw).execution_log]
         assert "search_purchase_history" in names
 
-    def test_replay_plan_has_no_purchase_history_call_without_a_product_or_vendor(self):
-        turn = ReplayGeminiClient({"requester_id": "E004"}).generate_turn([], [], "")
-        assert "search_purchase_history" not in [c.name for c in turn.function_calls]
+    def test_preflight_has_no_purchase_history_call_without_a_product_or_vendor(self):
+        from src.evidence import gather_mandatory_evidence
+
+        names = [r.tool_name for r in gather_mandatory_evidence({"requester_id": "E004"}).execution_log]
+        assert "search_purchase_history" not in names
+
+    def test_replay_stand_in_makes_no_tool_calls(self):
+        turn = ReplayGeminiClient({"requester_id": "E004", "product_name": "X"}).generate_turn([], [], "")
+        assert turn.function_calls == ()

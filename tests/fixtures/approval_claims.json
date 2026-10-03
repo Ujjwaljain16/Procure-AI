@@ -21,7 +21,14 @@
     "This was approved on 2026-09-15 by Finance.",
     "I have approved this request.",
     "Requires approval from Finance, but Procurement already approved it.",
-    "Pending approval from Legal; the CFO signed off on the budget."
+    "Pending approval from Legal; the CFO signed off on the budget.",
+    "I approve.",
+    "I hereby approve this purchase.",
+    "No approval is needed for this purchase.",
+    "Does not require approval.",
+    "This request doesn't need any approval.",
+    "Approval isn't required.",
+    "Approval is not necessary for this renewal."
   ],
   "negative": [
     "Requires approval from Finance before purchase.",
@@ -56,6 +63,21 @@
     "Until approval is granted, no purchase may be made.",
     "Route to Manager for sign-off.",
     "The sign-off step happens after policy review.",
-    "Department Head sign-off is required."
+    "Department Head sign-off is required.",
+    "No review has been completed for this vendor yet.",
+    "Only accepted vendors may be considered for this category.",
+    "The request is accepted for triage by Procurement.",
+    "Cleared for review by Privacy; awaiting Security.",
+    "Ask Procurement to confirm the vendor is accepted by Legal.",
+    "The vendor was accepted into the registry in 2024.",
+    "There is no approval on record for this vendor.",
+    "No checks were run against the vendor-risk service.",
+    "Approve the vendor terms only after Legal signs off.",
+    "Do not proceed with the purchase until Security reviews it.",
+    "Recommend approving the request after Finance reviews it.",
+    "No approval has been granted; do not buy anything yet.",
+    "Do not go ahead and buy the licenses before Legal signs off.",
+    "Only after Security completes its review should anyone purchase it.",
+    "Whether approval is needed depends on the annual cost."
   ]
 }

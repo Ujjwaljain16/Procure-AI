@@ -61,7 +61,7 @@ This starts the mock vendor-risk API (`http://127.0.0.1:8001`) and the Streamlit
 
 ## Read me first
 
-- **Reference date:** every policy result is computed against the fixed snapshot date 2026-09-30 (`data/procurement_policy.md`), never the system clock. Results do not change with the day you run them.
+- **Policy version and reference date:** policy version 2026.09; every policy result is computed against the fixed snapshot date 2026-09-30 (`data/procurement_policy.md`), never the system clock. Results do not change with the day you run them.
 - **Stopping the app (Windows):** Ctrl+C in the `run_local.py` terminal stops both the vendor mock and the UI. A forced kill is only needed if a process was left behind.
 - **Vendor mock:** it has no authentication and must stay on `127.0.0.1`. Do not bind it to a public interface.
 - **"Staged"** means the two-agent Architecture B (analyst then reviewer). It is selectable in the UI and produces the same kind of decision; A is the shipped default for the reasons in `docs/architecture_decision.md`.
@@ -216,7 +216,7 @@ Where each weighted area of the brief's rubric is demonstrated in this repo:
 | Agent & tool design | 20% | `docs/architecture.md`, `src/agent/`, `src/tools/` (5 tools, 1 deterministic), `tests/test_agent_*.py`, `tests/test_staged_agent.py` |
 | Reliability & human controls | 15% | Reliability section above, Edge Case Coverage above, `src/agent/validation.py`, `human_review_required` always `True` |
 | Evaluation & comparison | 20% | `evaluation/` (25-case replay + 6-case real sample), `docs/final_evaluation.md`, `docs/architecture_comparison.md`, `docs/architecture_decision.md` |
-| Engineering & communication | 10% | This README, `docs/`, 253 tests, `docs/starter_pack_audit.md` |
+| Engineering & communication | 10% | This README, `docs/`, the automated test suite (see CI), `docs/starter_pack_audit.md` |
 
 ## Project Structure
 
@@ -234,6 +234,6 @@ data/                    Synthetic employees/budgets/catalog/vendors/history/req
 mock_api/                Mock vendor-risk service
 evals/                   Starter pack's 6 public evaluation cases
 evaluation/              This project's frozen 25-case comparison set + replay/real runners
-tests/                   253 tests
+tests/                   automated test suite (run `pytest --collect-only -q` for the count)
 docs/                    Audit, baseline, comparison, final evaluation, decision memo, architecture, workflow
 ```

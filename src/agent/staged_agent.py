@@ -1,17 +1,19 @@
 """Architecture B: lightweight staged / two-agent variant (analyst -> reviewer).
 
-    USER REQUEST -> ANALYST AGENT -> TOOL CALLS -> EVIDENCE PACK
+    USER REQUEST -> MANDATORY EVIDENCE PREFLIGHT (src/evidence.py)
+                  -> ANALYST AGENT (supplemental, identity-bound tool calls)
                   -> POLICY ENGINE -> REVIEWER AGENT -> FINAL VALIDATION
                   -> ProcurementDecision -> HUMAN HANDOFF
 
-At most two reasoning stages. The analyst gathers evidence via the exact
-same allowlisted tools Architecture A uses (``src/tools/*.py`` via
-``src/agent/tools_registry.py``) and produces a structured ``AnalystReport``;
-the reviewer then consumes that report plus the evidence and the deterministic
-``PolicyEvaluation`` -- it has no tools of its own and makes zero additional
-tool calls by design. The policy engine and final validator
-(``src/agent/validation.py``) are the same code Architecture A uses; only the
-reasoning/orchestration layer differs.
+At most two reasoning stages. The policy inputs are gathered by the same
+deterministic preflight Architecture A uses, before any model call, so the
+analyst cannot change what the policy engine sees. The analyst then produces
+a structured ``AnalystReport`` from that evidence, with optional supplemental
+lookups bound to this request's own identity values. The reviewer consumes the
+report, the evidence and the deterministic ``PolicyEvaluation``; it has no
+tools and makes zero tool calls by design. The policy engine and final
+validator (``src/agent/validation.py``) are the same code Architecture A uses;
+only the reasoning/orchestration layer differs.
 
 If the reviewer fails, the run keeps the analyst's report and evidence, marks
 ``reviewer_status`` as FAILED with the reason, and still passes everything
@@ -31,6 +33,7 @@ from src.agent import staged_prompts
 from src.agent.gemini_adapter import classify_model_exception
 from src.agent.loop_utils import canonical_arguments, is_cancelled
 from src.agent.schemas import AgentSynthesis
+from src.evidence import gather_mandatory_evidence
 from src.agent.staged_gemini_adapter import StagedGeminiClient, create_staged_gemini_client
 from src.agent.staged_schemas import AnalystReport
 from src.agent.tools_registry import TOOL_SPECS, ToolRegistry
@@ -45,6 +48,13 @@ ARCHITECTURE_NAME = "staged"
 REVIEWER_STATUS_OK = "OK"
 REVIEWER_STATUS_SKIPPED = "SKIPPED"
 REVIEWER_STATUS_FAILED = "FAILED"
+
+
+def _api_attempts_since(client, before: int):
+    """Real HTTP attempts this thread made since ``before``; None when the client is not a real API client."""
+    from src.agent.attempts import current_attempts
+
+    return current_attempts() - before if getattr(client, "counts_api_attempts", False) else None
 
 
 @dataclass(frozen=True)
@@ -80,9 +90,15 @@ def run_staged_agent_with_trace(
     cancel_event: Optional[threading.Event] = None,
 ) -> StagedAgentRunResult:
     start = time.monotonic()
+    from src.agent.attempts import current_attempts
+
+    attempts_before = current_attempts()
     raw = data_access.get_request_validated(request_id)  # KeyError / MalformedRequestError propagate before any LLM call
 
-    registry = ToolRegistry()
+    # Authoritative evidence is gathered in code before any model call. This is
+    # the same preflight Architecture A uses, so the two architectures differ
+    # only in how the model is orchestrated, never in the evidence they see.
+    registry = gather_mandatory_evidence(raw)
     analyst_llm_calls = 0
     reviewer_llm_calls = 0
     gemini_unavailable_reason: Optional[str] = None
@@ -102,7 +118,6 @@ def run_staged_agent_with_trace(
     analyst_report: Optional[AnalystReport] = None
     contents: list = [staged_prompts.build_analyst_initial_message(raw)]
     seen_calls: set = set()
-    nudged = False
 
     if active_client is not None and gemini_unavailable_reason is None:
         for _ in range(MAX_ANALYST_TOOL_TURNS):
@@ -121,12 +136,6 @@ def run_staged_agent_with_trace(
                 break
 
             if not turn.function_calls:
-                if registry.call_count == 0 and not nudged:
-                    nudged = True
-                    if turn.raw_content is not None:
-                        contents.append(turn.raw_content)
-                    contents.append(staged_prompts.build_analyst_corrective_message())
-                    continue
                 break
 
             all_calls_redundant = True
@@ -139,7 +148,7 @@ def run_staged_agent_with_trace(
                     all_calls_redundant = False
                 seen_calls.add(call_key)
 
-                record = registry.execute(call.name, call.arguments)
+                record = registry.execute(call.name, call.arguments, bound_request=raw)
                 logger.info("request=%s architecture=%s stage=analyst tool=%s success=%s", request_id, ARCHITECTURE_NAME, call.name, record.success)
                 response_pairs.append((call, record))
 
@@ -203,6 +212,8 @@ def run_staged_agent_with_trace(
         tool_names=registry.tool_names,
         architecture=ARCHITECTURE_NAME,
         latency_ms=latency_ms,
+        api_attempts=_api_attempts_since(active_client, attempts_before),
+        model=getattr(active_client, "model_name", None),
     )
 
     logger.info(
@@ -219,6 +230,7 @@ def run_staged_agent_with_trace(
         policy_evaluation=policy_evaluation,
         telemetry=telemetry,
         gemini_unavailable_reason=gemini_unavailable_reason,
+        raw_request=raw,
     )
 
     return StagedAgentRunResult(

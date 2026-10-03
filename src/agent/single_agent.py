@@ -28,6 +28,7 @@ from typing import Optional
 from src import data_access
 from src.agent import prompts
 from src.agent.loop_utils import canonical_arguments, is_cancelled
+from src.evidence import gather_mandatory_evidence
 from src.agent.gemini_adapter import GeminiClientProtocol, GeminiConfigurationError, classify_model_exception, create_gemini_client
 from src.agent.schemas import AgentSynthesis
 from src.agent.tools_registry import TOOL_SPECS, ToolRegistry
@@ -39,6 +40,13 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_TURNS = 6
 ARCHITECTURE_NAME = "single"
+
+
+def _api_attempts_since(client, before: int):
+    """Real HTTP attempts this thread made since ``before``; None when the client is not a real API client."""
+    from src.agent.attempts import current_attempts
+
+    return current_attempts() - before if getattr(client, "counts_api_attempts", False) else None
 
 
 @dataclass(frozen=True)
@@ -91,9 +99,14 @@ def run_single_agent_with_trace(
     alongside the ``ProcurementDecision``.
     """
     start = time.monotonic()
+    from src.agent.attempts import current_attempts
+
+    attempts_before = current_attempts()
     raw = data_access.get_request_validated(request_id)  # KeyError / MalformedRequestError propagate before any LLM call
 
-    registry = ToolRegistry()
+    # Authoritative evidence is gathered in code before any model call, so the
+    # policy result does not depend on whether, or how well, the model works.
+    registry = gather_mandatory_evidence(raw)
     llm_calls = 0
     gemini_unavailable_reason: Optional[str] = None
 
@@ -107,7 +120,6 @@ def run_single_agent_with_trace(
 
     contents: list = [prompts.build_initial_user_message(raw)]
     seen_calls: set = set()
-    nudged = False
 
     if active_client is not None and gemini_unavailable_reason is None:
         for _ in range(MAX_TOOL_TURNS):
@@ -126,15 +138,6 @@ def run_single_agent_with_trace(
                 break
 
             if not turn.function_calls:
-                if registry.call_count == 0 and not nudged:
-                    # The model answered in text without gathering evidence --
-                    # give it exactly one chance to call the tools before the
-                    # loop ends with zero evidence.
-                    nudged = True
-                    if turn.raw_content is not None:
-                        contents.append(turn.raw_content)
-                    contents.append(prompts.build_corrective_message())
-                    continue
                 break
 
             all_calls_redundant = True
@@ -147,7 +150,7 @@ def run_single_agent_with_trace(
                     all_calls_redundant = False
                 seen_calls.add(call_key)
 
-                record = registry.execute(call.name, call.arguments)
+                record = registry.execute(call.name, call.arguments, bound_request=raw)
                 logger.info("request=%s architecture=%s tool=%s success=%s", request_id, ARCHITECTURE_NAME, call.name, record.success)
                 response_pairs.append((call, record))
 
@@ -196,6 +199,8 @@ def run_single_agent_with_trace(
         tool_names=registry.tool_names,
         architecture=ARCHITECTURE_NAME,
         latency_ms=latency_ms,
+        api_attempts=_api_attempts_since(active_client, attempts_before),
+        model=getattr(active_client, "model_name", None),
     )
 
     logger.info(
@@ -212,6 +217,7 @@ def run_single_agent_with_trace(
         policy_evaluation=policy_evaluation,
         telemetry=telemetry,
         gemini_unavailable_reason=gemini_unavailable_reason,
+        raw_request=raw,
     )
 
     return AgentRunResult(

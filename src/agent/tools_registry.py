@@ -202,10 +202,39 @@ class ToolExecutionRecord:
         }
 
 
+# Identity arguments a model-initiated (supplemental) call may carry, and the
+# request field each must equal. A supplemental call that names a different
+# employee, vendor or product is refused before the tool runs.
+_IDENTITY_ARGS: dict[str, dict[str, str]] = {
+    "get_employee_budget": {"employee_id": "requester_id"},
+    "search_catalog": {"product_name": "product_name", "vendor_name": "vendor_name", "category": "category"},
+    "search_purchase_history": {"product_name": "product_name", "vendor_name": "vendor_name"},
+    "get_vendor_evidence": {"vendor_name": "vendor_name"},
+}
+
+
+def _identity_violation(name: str, arguments: dict, bound_request: dict) -> Optional[str]:
+    for argument, field in _IDENTITY_ARGS.get(name, {}).items():
+        if argument not in arguments:
+            continue
+        expected = bound_request.get(field)
+        supplied = str(arguments[argument]).strip().lower()
+        if expected is None or str(expected).strip().lower() != supplied:
+            return f"'{argument}' must match this request's {field}"
+    return None
+
+
 class ToolRegistry:
     """Executes allowlisted tool calls and accumulates their EvidenceItem
-    output under stable IDs (E1, E2, ...), plus keeps the structured results
-    needed to build a PolicyContext afterward. One instance per request.
+    output under stable IDs (E1, E2, ...).
+
+    Two kinds of call, with different authority:
+    - MANDATORY calls are made by the application from the validated request
+      (``mandatory=True``). Only their results feed the policy accessors
+      (budget, catalog matches, vendor evidence, purchase history).
+    - SUPPLEMENTAL calls are model-initiated (``bound_request`` supplied). Their
+      identity arguments must match the request, and their results are kept
+      as evidence for explanation only. They never change a policy input.
     """
 
     def __init__(self) -> None:
@@ -218,6 +247,8 @@ class ToolRegistry:
         self._catalog_results: list[CatalogSearchResult] = []
         self._vendor_evidence: Optional[VendorEvidenceResult] = None
         self._purchase_history_results: list[PurchaseHistoryResult] = []
+        self.supplemental_calls = 0
+        self._supplemental_results: list = []
 
     def _register_evidence(self, items) -> tuple[str, ...]:
         ids = []
@@ -228,15 +259,33 @@ class ToolRegistry:
             ids.append(eid)
         return tuple(ids)
 
-    def execute(self, name: str, arguments: dict) -> ToolExecutionRecord:
+    def execute(
+        self,
+        name: str,
+        arguments: dict,
+        *,
+        mandatory: bool = False,
+        bound_request: Optional[dict] = None,
+    ) -> ToolExecutionRecord:
         self.call_count += 1
         self.tool_names.append(name)
+        if not mandatory:
+            self.supplemental_calls += 1
 
         spec = TOOL_SPECS.get(name)
         if spec is None:
             record = ToolExecutionRecord(name, dict(arguments), False, f"Unsupported tool '{name}'", (), "Tool not available.")
             self.execution_log.append(record)
             return record
+
+        if not mandatory:
+            if bound_request is None:
+                raise ValueError("supplemental tool calls must be bound to the validated request")
+            violation = _identity_violation(name, arguments, bound_request)
+            if violation is not None:
+                record = ToolExecutionRecord(name, dict(arguments), False, violation, (), "Argument does not match this request.")
+                self.execution_log.append(record)
+                return record
 
         try:
             validated = spec.validate(arguments)
@@ -253,7 +302,10 @@ class ToolRegistry:
             return record
 
         evidence_ids = self._register_evidence(result.evidence)
-        if name == "get_employee_budget":
+        if not mandatory:
+            # Explanation evidence only: never a policy input.
+            self._supplemental_results.append(result)
+        elif name == "get_employee_budget":
             self._employee_budget = result
         elif name == "search_catalog":
             self._catalog_results.append(result)

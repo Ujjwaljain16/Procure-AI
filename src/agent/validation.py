@@ -26,6 +26,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from src.injection_visibility import injection_visible
 from src.agent.failure_taxonomy import classify_failure_reason
 from src.agent.schemas import AgentSynthesis
 from src.agent.tools_registry import ToolRegistry
@@ -51,12 +52,32 @@ _SAFE_CLAUSE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Additional, deliberately narrow forms (additive; the clause-level logic above is unchanged):
+# 1. First-person approval -- the model issuing an approval itself: "I approve.", "I hereby approve."
+_FIRST_PERSON_APPROVAL = re.compile(r"\bi\s+(?:hereby\s+)?approve\b", re.IGNORECASE)
+
+# 2. An explicit statement that no approval is needed. Judged independently of the "safe" patterns above
+#    because "no approval is needed" contains a safe-looking phrase while asserting the opposite of policy.
+_NO_APPROVAL_NEEDED = re.compile(
+    r"\bno approval (?:is |would be )?(?:needed|required|necessary)\b"
+    r"|\b(?:does(?:n't| not)|do(?:n't| not)|will not|won't)\s+(?:need|require)\s+(?:any\s+|further\s+)?approval\b"
+    r"|\bapproval (?:is|are)(?:n't| not)\s+(?:needed|required|necessary)\b",
+    re.IGNORECASE,
+)
+_NO_APPROVAL_NEEDED_SAFE = re.compile(
+    r"\b(?:until|before|unless|pending|do not|don't|cannot|can't|must not|should not|may not|never)\b", re.IGNORECASE
+)
+
 _CLAUSE_SPLIT = re.compile(r"(?<=[.;!?])\s+|\n+|,\s*|\s+(?:but|however|although|though|while|whereas)\s+", re.IGNORECASE)
 
 
 def _claims_autonomous_approval(text: str) -> bool:
     for clause in _CLAUSE_SPLIT.split(text):
         if _APPROVAL_CLAIM_PATTERN.search(clause) and not _SAFE_CLAUSE_PATTERN.search(clause):
+            return True
+        if _FIRST_PERSON_APPROVAL.search(clause):
+            return True
+        if _NO_APPROVAL_NEEDED.search(clause) and not _NO_APPROVAL_NEEDED_SAFE.search(clause):
             return True
     return False
 
@@ -75,6 +96,7 @@ def build_procurement_decision(
     policy_evaluation: PolicyEvaluation,
     telemetry: RunTelemetry,
     gemini_unavailable_reason: Optional[str] = None,
+    raw_request: Optional[dict] = None,
 ) -> ProcurementDecision:
     if gemini_unavailable_reason is not None:
         recommendation = f"{classify_failure_reason(gemini_unavailable_reason)[1]} Manual review required."
@@ -117,6 +139,11 @@ def build_procurement_decision(
     risk_flags = list(policy_evaluation.risk_flags)
     if synthesis is not None and synthesis.prompt_injection_detected and "prompt_injection_detected" not in risk_flags:
         risk_flags.append("prompt_injection_detected")
+    # Deterministic visibility (policy 9): independent of the model. It only adds this one flag.
+    if raw_request is not None and "prompt_injection_detected" not in risk_flags:
+        business_text = [raw_request.get("business_justification")] + [item.finding for item in registry.all_evidence()]
+        if injection_visible(business_text):
+            risk_flags.append("prompt_injection_detected")
 
     return ProcurementDecision(
         request_id=request_id,
