@@ -964,9 +964,6 @@ def main(argv: list[str]) -> int:
     if args.real:
         if args.modes or args.arch:
             parser.error("--real runs normal mode for both architectures on the live sample; faults are offline only")
-        from dotenv import load_dotenv
-
-        load_dotenv(ROOT / ".env", override=False)
         if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY_POOL")):
             print("No Gemini key found. Set GEMINI_API_KEY (or GEMINI_API_KEY_POOL) in the environment or in .env.")
             print("Nothing was called. Offline evaluation: python -m evaluation.correctness.evaluator")
