@@ -83,7 +83,7 @@ if run_clicked:
     )
     with st.spinner(spinner_text):
         try:
-            result = run_with_timeout(lambda: runner(request_id))
+            result = run_with_timeout(lambda cancel: runner(request_id, cancel_event=cancel))
             st.session_state.results[cache_key] = build_procurement_view(result)
         except (KeyError, MalformedRequestError) as exc:
             st.session_state.results[cache_key] = {"kind": "invalid_request", "message": str(exc)}

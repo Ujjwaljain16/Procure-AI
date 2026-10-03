@@ -1,45 +1,50 @@
-"""External analysis-timeout guard.
+"""External analysis deadline.
 
-Wraps a full agent run in a hard wall-clock deadline without touching the
-bounded tool-turn loop inside the frozen src/agent/single_agent.py -- one
-stdlib primitive (concurrent.futures), not a distributed cancellation system.
-
-Caveat, documented rather than hidden: Python threads cannot be forcibly
-killed, so a timed-out call keeps running in the background after
-run_with_timeout returns; its result is simply discarded. Harmless for
-correctness (nothing from an abandoned call is written anywhere), but worth
-knowing if you're watching resource usage during a live demo.
+Runs a full agent call on a daemon thread with a wall-clock deadline. The
+worker receives a ``threading.Event``; when the deadline passes the event is
+set, and the orchestration loops check it between turns and before each tool
+call, so an abandoned run stops spending quota at the next boundary instead of
+running to completion. The thread is a daemon, so the process can still exit.
 """
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as _FutureTimeoutError
+import os
+import threading
 from typing import Callable, TypeVar
 
 T = TypeVar("T")
 
-# The real 6-case sample measured Architecture B's median real-mode latency
-# at ~20.8s (docs/final_evaluation.md) -- this leaves real headroom above
-# normal behavior for either architecture, while still giving a hard
-# operational bound instead of none at all.
-MAX_ANALYSIS_SECONDS = 45.0
+# B's measured real-mode median is ~20.8s (docs/final_evaluation.md). The
+# deadline sits above normal behavior for either architecture; override with
+# ANALYSIS_TIMEOUT_SECONDS if a slower model or network needs more room.
+DEFAULT_MAX_ANALYSIS_SECONDS = 45.0
+MAX_ANALYSIS_SECONDS = float(os.environ.get("ANALYSIS_TIMEOUT_SECONDS", DEFAULT_MAX_ANALYSIS_SECONDS))
 
 
-def run_with_timeout(fn: Callable[[], T], timeout_seconds: float = MAX_ANALYSIS_SECONDS) -> T:
-    """Runs fn() in a worker thread with a hard wall-clock deadline.
+def run_with_timeout(fn: Callable[[threading.Event], T], timeout_seconds: float = MAX_ANALYSIS_SECONDS) -> T:
+    """Runs ``fn(cancel_event)`` with a hard deadline.
 
-    Raises the stdlib builtin TimeoutError (not asyncio's) if fn() doesn't
-    finish in time -- callers decide what that means for their own return
-    type, since there's no generic "timed-out result" to invent here.
+    Raises the stdlib builtin ``TimeoutError`` if it does not finish in time,
+    after setting ``cancel_event`` so the worker stops at its next checkpoint.
+    Exceptions raised inside ``fn`` are re-raised in the caller unchanged.
     """
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(fn)
-    try:
-        return future.result(timeout=timeout_seconds)
-    except _FutureTimeoutError:
-        raise TimeoutError(f"Analysis did not complete within {timeout_seconds:.0f}s") from None
-    finally:
-        # wait=False: never block the caller on an abandoned, still-running
-        # thread -- that would defeat the point of a hard deadline.
-        executor.shutdown(wait=False)
+    cancel_event = threading.Event()
+    outcome: dict = {}
+
+    def worker() -> None:
+        try:
+            outcome["value"] = fn(cancel_event)
+        except BaseException as exc:  # re-raised in the caller below
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=worker, name="procureai-analysis", daemon=True)
+    thread.start()
+    thread.join(timeout_seconds)
+
+    if thread.is_alive():
+        cancel_event.set()
+        raise TimeoutError(f"Analysis did not complete within {timeout_seconds:.0f}s")
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["value"]

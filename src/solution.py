@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import time
 
 from src.contracts import Architecture, ProcurementDecision, RunTelemetry
+
+logger = logging.getLogger(__name__)
 
 
 def _timeout_decision(request_id: str, architecture: Architecture, elapsed_ms: float) -> ProcurementDecision:
@@ -23,18 +26,31 @@ def _timeout_decision(request_id: str, architecture: Architecture, elapsed_ms: f
     )
 
 
+def _unexpected_failure_decision(request_id: str, architecture: Architecture, elapsed_ms: float) -> ProcurementDecision:
+    return ProcurementDecision(
+        request_id=request_id,
+        recommendation="Policy evaluation could not be completed. Manual review required.",
+        next_step="A human reviewer should evaluate this request manually; the automated analysis hit an internal error.",
+        risk_flags=["analysis_failed"],
+        human_review_required=True,
+        telemetry=RunTelemetry(architecture=architecture, llm_calls=None, tool_calls=None, latency_ms=elapsed_ms),
+    )
+
+
 def handle_request(request_id: str, architecture: Architecture = "single") -> ProcurementDecision:
     """Assessment adapter.
 
     Keep this function callable by the public/hidden evaluation harness.
 
     Runs a narrow structural pre-analysis gate (src/data_access.py::
-    get_request_validated) before any LLM call -- an unknown request_id
-    still raises KeyError, a structurally broken record raises
-    MalformedRequestError, neither is ever silently turned into a fabricated
-    decision. The whole run is also bounded by a hard wall-clock deadline
-    (src/agent/timeout_guard.py); a timeout degrades to a conservative,
-    human-review decision instead of hanging indefinitely.
+    get_request_validated) before any LLM call -- an unknown request_id still
+    raises KeyError and a structurally broken record raises
+    MalformedRequestError; neither is turned into a fabricated decision. The run
+    is bounded by a hard deadline (src/agent/timeout_guard.py): a timeout
+    degrades to a conservative human-review decision and tells the worker to
+    stop at its next checkpoint. An unexpected internal error is logged with
+    its traceback and returned as an explicit human-review decision, never a
+    raw traceback to the caller.
     """
     from src.agent.timeout_guard import run_with_timeout
     from src.data_access import get_request_validated
@@ -44,11 +60,11 @@ def handle_request(request_id: str, architecture: Architecture = "single") -> Pr
     if architecture == "single":
         from src.agent.single_agent import run_single_agent
 
-        runner = lambda: run_single_agent(request_id)
+        runner = lambda cancel: run_single_agent(request_id, cancel_event=cancel)
     elif architecture == "staged":
         from src.agent.staged_agent import run_staged_agent
 
-        runner = lambda: run_staged_agent(request_id)
+        runner = lambda cancel: run_staged_agent(request_id, cancel_event=cancel)
     else:
         raise ValueError(f"Unknown architecture: {architecture!r}")
 
@@ -57,3 +73,6 @@ def handle_request(request_id: str, architecture: Architecture = "single") -> Pr
         return run_with_timeout(runner)
     except TimeoutError:
         return _timeout_decision(request_id, architecture, (time.monotonic() - started) * 1000)
+    except Exception:
+        logger.exception("request=%s architecture=%s unexpected internal error", request_id, architecture)
+        return _unexpected_failure_decision(request_id, architecture, (time.monotonic() - started) * 1000)
