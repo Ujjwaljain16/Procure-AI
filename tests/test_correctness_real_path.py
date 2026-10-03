@@ -357,7 +357,7 @@ def test_live_sample_is_sixteen_justified_cases_that_exist_in_the_ground_truth()
 
 def test_production_run_refuses_a_case_outside_the_sample():
     with pytest.raises(ValueError, match="limited to the sample"):
-        ev.run_real(TRUTH, archs=ev.ARCHS, modes=("normal",), case_ids={"S-1002"})
+        ev.run_real(TRUTH, archs=ev.ARCHS, modes=("normal",), case_ids={"S-COST-ZERO"})
 
 
 def test_production_run_refuses_fewer_than_both_architectures_or_fault_modes():
