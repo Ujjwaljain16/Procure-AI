@@ -57,3 +57,16 @@ For each case, both architectures produce a cell with the scored dimensions from
   and no significance claim will be made.
 - Recommendation text is not scored by the offline evaluator, and this rule does not score it either.
 - If B meets the rule, the decision changes to B. That is a legitimate evidence-based outcome, and it is reported as such.
+
+
+## Amendment 1: model change (dated before any run on the new model)
+
+- **Changed:** the model is `google/gemini-3.7-flash` through CloseRouter, replacing `google/gemini-3-flash`.
+- **Reason:** the earlier model's route on CloseRouter was unavailable during the attempts. Its stability on the
+  provider dashboard showed "Not enough data". The archived attempts (aa2fafe) show 3 of 32 cells completed,
+  with HTTP 503 `no_available_provider`. Those attempts are not results.
+- **Evidence for the new model:** 100% stability on the provider dashboard, lowest listed price for the family, and a
+  one-request probe (JSON mode, valid reply, stop reason `stop`).
+- **Unchanged:** the decision rule, the 16-case sample, the execution order, the quota gate, the reporting requirements,
+  and the metrics. The rule above is not amended.
+- **Recorded:** the failed attempts stay in `evaluation/correctness/results/archive/` and are not cited.

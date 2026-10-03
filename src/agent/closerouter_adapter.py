@@ -25,7 +25,7 @@ from src.agent.gemini_adapter import GENERATION_TEMPERATURE, GeminiConfiguration
 from src.agent.schemas import AgentSynthesis
 from src.agent.staged_schemas import AnalystReport
 
-DEFAULT_MODEL = "google/gemini-3-flash"
+DEFAULT_MODEL = "google/gemini-3.7-flash"
 DEFAULT_BASE_URL = "https://api.closerouter.dev/v1"
 DEFAULT_TIMEOUT_SECONDS = 60.0
 KEY_ENV = "CLOSEROUTER_API_KEY"
