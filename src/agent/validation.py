@@ -35,33 +35,30 @@ from src.policy_engine import PolicyEvaluation
 FALLBACK_RECOMMENDATION = "Unable to produce an automated recommendation; route to human review."
 FALLBACK_NEXT_STEP = "A human reviewer should evaluate this request manually using the collected evidence and policy result."
 
-_APPROVED_WORD_PATTERN = re.compile(r"\bapproved\b", re.IGNORECASE)
-
-# Phrases where "approved" legitimately appears without claiming this
-# request's approval has already been granted (e.g. describing what approval
-# is still needed, or a past, unrelated purchase).
-_SAFE_APPROVAL_CONTEXT_PHRASES = (
-    "not approved",
-    "not yet approved",
-    "no approval",
-    "pending approval",
-    "requires approval",
-    "approval required",
-    "approval is required",
-    "without approval",
-    "before approval",
-    "needs approval",
-    "awaiting approval",
+_APPROVAL_CLAIM_PATTERN = re.compile(
+    r"\b(?:approved|signed[ -]off|green[ -]?lit|authori[sz]ed|approval (?:has been |was |is )?granted)\b",
+    re.IGNORECASE,
 )
+
+# Safe context is judged per clause, against the clause that contains the
+# claim -- never against the whole text. A phrase like "requires approval" in
+# one clause must not clear an approval claim in another.
+_SAFE_CLAUSE_PATTERN = re.compile(
+    r"\b(?:not (?:yet )?(?:approved|authori[sz]ed)|no approval|pending approval|requires? (?:\w+ )?approval"
+    r"|approval (?:is )?(?:required|needed|outstanding|pending)|needs? (?:\w+ )?approval|awaiting approval"
+    r"|without approval|before (?:any )?approval|once approved|if approved|must be approved|to be approved"
+    r"|(?:do not|don't|never|cannot|can't)\b[^.;!?]{0,40}\b(?:approved|approval|authori[sz]ed))\b",
+    re.IGNORECASE,
+)
+
+_CLAUSE_SPLIT = re.compile(r"(?<=[.;!?])\s+|\n+|,\s*|\s+(?:but|however|although|though|while|whereas)\s+", re.IGNORECASE)
 
 
 def _claims_autonomous_approval(text: str) -> bool:
-    lowered = text.lower()
-    if not _APPROVED_WORD_PATTERN.search(lowered):
-        return False
-    if any(phrase in lowered for phrase in _SAFE_APPROVAL_CONTEXT_PHRASES):
-        return False
-    return True
+    for clause in _CLAUSE_SPLIT.split(text):
+        if _APPROVAL_CLAIM_PATTERN.search(clause) and not _SAFE_CLAUSE_PATTERN.search(clause):
+            return True
+    return False
 
 
 def _guard_against_autonomous_approval_claims(text: str) -> str:

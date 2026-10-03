@@ -22,6 +22,7 @@ from decimal import Decimal
 from typing import Optional
 
 from src.agent.failure_taxonomy import classify_failure_reason
+from src.agent.validation import _guard_against_autonomous_approval_claims
 from src.agent.single_agent import AgentRunResult
 from src.policy_engine import (
     AssessmentState,
@@ -476,6 +477,9 @@ def build_procurement_view(result) -> ProcurementView:
     if analyst_report is not None and analyst_report.observations:
         analyst_note = "Analyst observations: " + "; ".join(analyst_report.observations)
         rationale = f"{rationale}\n\n{analyst_note}" if rationale else analyst_note
+
+    if rationale:
+        rationale = _guard_against_autonomous_approval_claims(rationale)
 
     policy_checks = _build_policy_checks(result.policy_evaluation.checks)
     failure_category = classify_failure_reason(result.gemini_unavailable_reason)[0] if result.gemini_unavailable_reason else None
