@@ -205,6 +205,7 @@ def run_single_agent_with_trace(
         policy_evaluation=policy_evaluation,
         telemetry=telemetry,
         gemini_unavailable_reason=gemini_unavailable_reason,
+        raw_request=raw,
     )
 
     return AgentRunResult(

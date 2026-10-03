@@ -26,6 +26,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from src.injection_visibility import injection_visible
 from src.agent.failure_taxonomy import classify_failure_reason
 from src.agent.schemas import AgentSynthesis
 from src.agent.tools_registry import ToolRegistry
@@ -95,6 +96,7 @@ def build_procurement_decision(
     policy_evaluation: PolicyEvaluation,
     telemetry: RunTelemetry,
     gemini_unavailable_reason: Optional[str] = None,
+    raw_request: Optional[dict] = None,
 ) -> ProcurementDecision:
     if gemini_unavailable_reason is not None:
         recommendation = f"{classify_failure_reason(gemini_unavailable_reason)[1]} Manual review required."
@@ -137,6 +139,11 @@ def build_procurement_decision(
     risk_flags = list(policy_evaluation.risk_flags)
     if synthesis is not None and synthesis.prompt_injection_detected and "prompt_injection_detected" not in risk_flags:
         risk_flags.append("prompt_injection_detected")
+    # Deterministic visibility (policy 9): independent of the model. It only adds this one flag.
+    if raw_request is not None and "prompt_injection_detected" not in risk_flags:
+        business_text = [raw_request.get("business_justification")] + [item.finding for item in registry.all_evidence()]
+        if injection_visible(business_text):
+            risk_flags.append("prompt_injection_detected")
 
     return ProcurementDecision(
         request_id=request_id,
