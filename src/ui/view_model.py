@@ -33,6 +33,18 @@ from src.policy_engine import (
     evaluate_vendor_security_assessment,
 )
 
+_MARKDOWN_SPECIAL = set("\`*_{}[]()#+-.!|<>~")
+
+
+def md_escape(text) -> str:
+    """Escapes free text (request fields, model output, evidence) so that
+    st.markdown shows it literally -- no images, links, or emphasis injected
+    from data or model output."""
+    if text is None:
+        return ""
+    return "".join(f"\{ch}" if ch in _MARKDOWN_SPECIAL else ch for ch in str(text))
+
+
 MISSING_LABEL = "Missing"
 NOT_PROVIDED_LABEL = "Not provided"
 

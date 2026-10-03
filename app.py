@@ -18,7 +18,7 @@ from src.agent.single_agent import run_single_agent_with_trace
 from src.agent.staged_agent import run_staged_agent_with_trace
 from src.agent.timeout_guard import MAX_ANALYSIS_SECONDS, run_with_timeout
 from src.data_access import MalformedRequestError
-from src.ui.view_model import ProcurementView, build_procurement_view, classify_failure_reason
+from src.ui.view_model import ProcurementView, build_procurement_view, classify_failure_reason, md_escape
 
 ROOT = Path(__file__).resolve().parent
 REQUESTS = json.loads((ROOT / "data" / "requests.json").read_text(encoding="utf-8"))
@@ -129,9 +129,9 @@ with left:
     if isinstance(result, ProcurementView):
         for field in result.request_details:
             if field.is_missing:
-                st.markdown(f"**{field.label}:** :orange[{field.value}]")
+                st.markdown(f"**{field.label}:** :orange[{md_escape(field.value)}]")
             else:
-                st.markdown(f"**{field.label}:** {field.value}")
+                st.markdown(f"**{field.label}:** {md_escape(field.value)}")
     else:
         # nothing analyzed yet -- still show the raw request, never a blank page
         r = selected_request
@@ -152,7 +152,7 @@ with left:
             if value is None or value == "":
                 st.markdown(f"**{label}:** :orange[Not provided]")
             else:
-                st.markdown(f"**{label}:** {value}")
+                st.markdown(f"**{label}:** {md_escape(value)}")
         st.caption("Click **Run analysis** to gather evidence and evaluate policy for this request.")
 
 # ---------------------------------------------------------------------------
@@ -192,15 +192,15 @@ with right:
             st.error(view.error_banner)
 
         st.subheader("Recommendation")
-        st.markdown(f"### {view.recommendation}")
+        st.markdown(f"### {md_escape(view.recommendation)}")
         if view.rationale:
             with st.expander("Why?", expanded=True):
-                st.write(view.rationale)
+                st.markdown(md_escape(view.rationale))
                 if view.constraints_summary:
                     st.markdown("**Policy constraints**")
                     for constraint in view.constraints_summary:
-                        st.markdown(f"{constraint.icon} {constraint.text}")
-        st.markdown(f"**Next step:** {view.next_step}")
+                        st.markdown(f"{constraint.icon} {md_escape(constraint.text)}")
+        st.markdown(f"**Next step:** {md_escape(view.next_step)}")
 
         approvals_col, flags_col = st.columns(2)
         with approvals_col:
@@ -243,15 +243,15 @@ if isinstance(result, ProcurementView):
             vs_cols = st.columns(2)
             with vs_cols[0]:
                 st.markdown("**Registry**")
-                st.markdown(vs.registry_status or "_No registry record_")
+                st.markdown(md_escape(vs.registry_status) or "_No registry record_")
                 if vs.registry_reviewed_date:
                     st.caption(f"Reviewed: {vs.registry_reviewed_date}")
             with vs_cols[1]:
                 st.markdown("**Vendor risk service**")
-                st.markdown(vs.live_status or "_No live record_")
+                st.markdown(md_escape(vs.live_status) or "_No live record_")
                 if vs.live_verified_date:
                     st.caption(f"Last verified: {vs.live_verified_date}")
-            st.markdown(f"**Action:** {vs.action_text}")
+            st.markdown(f"**Action:** {md_escape(vs.action_text)}")
 
     ev_col, policy_col = st.columns([1.2, 1], gap="large")
 
@@ -262,9 +262,9 @@ if isinstance(result, ProcurementView):
         for item in view.evidence:
             with st.container(border=True):
                 st.markdown(f"**{item.evidence_id}** &nbsp;·&nbsp; _{item.source}_")
-                st.write(item.finding)
+                st.markdown(md_escape(item.finding))
                 if item.reference:
-                    st.caption(f"Reference: `{item.reference}`")
+                    st.caption(f"Reference: {md_escape(item.reference)}")
 
     with policy_col:
         st.subheader("Policy checks")
@@ -274,7 +274,7 @@ if isinstance(result, ProcurementView):
         for check in view.policy_checks:
             icon = status_icon.get(check.status_kind, "•")
             st.markdown(f"{icon} **{check.rule_id}** — {check.status_label}")
-            st.caption(check.detail)
+            st.caption(md_escape(check.detail))
 
     st.divider()
 

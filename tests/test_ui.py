@@ -443,3 +443,13 @@ class TestMalformedOrEmptyResultDoesNotCrash:
         view = build_procurement_view(result)
         assert view.evidence == ()
         assert view.recommendation
+
+
+class TestFreeTextIsEscapedForMarkdown:
+    def test_hostile_request_field_renders_as_literal_text(self):
+        from src.ui.view_model import md_escape
+
+        rendered = md_escape("![tracker](http://evil.example/p.png) <script>x</script>")
+        assert "![tracker]" not in rendered
+        assert "<script>" not in rendered
+        assert "\!\[" in rendered
