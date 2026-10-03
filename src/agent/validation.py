@@ -26,6 +26,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from src.agent.failure_taxonomy import classify_failure_reason
 from src.agent.schemas import AgentSynthesis
 from src.agent.tools_registry import ToolRegistry
 from src.contracts import ProcurementDecision, RunTelemetry
@@ -79,7 +80,7 @@ def build_procurement_decision(
     gemini_unavailable_reason: Optional[str] = None,
 ) -> ProcurementDecision:
     if gemini_unavailable_reason is not None:
-        recommendation = f"Automated analysis unavailable ({gemini_unavailable_reason}); manual review required."
+        recommendation = f"{classify_failure_reason(gemini_unavailable_reason)[1]} Manual review required."
         next_step = FALLBACK_NEXT_STEP
         cited_evidence = registry.all_evidence()
     elif synthesis is None:

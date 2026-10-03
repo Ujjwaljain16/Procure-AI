@@ -186,7 +186,7 @@ class TestGeminiUnavailable:
             gemini_unavailable_reason="GeminiConfigurationError",
         )
         assert "unavailable" in decision.recommendation.lower()
-        assert "GeminiConfigurationError" in decision.recommendation
+        assert "GeminiConfigurationError" not in decision.recommendation
         assert decision.human_review_required is True
 
 
